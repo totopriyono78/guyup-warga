@@ -107,7 +107,10 @@ menjalankan `npm run build`, `php artisan migrate --force`, dan seeder admin sec
    ```
 3. **Volume** untuk foto: buat Volume dan pasang (mount) di `/app/storage/app/public`.
    Tanpa volume, foto yang diunggah hilang setiap kali deploy ulang. Tautan `public/storage` dibuat otomatis.
-4. **Penjadwal** (tagihan bulanan & cek status QRIS): buat layanan kedua dari repo yang sama dengan
+4. **Migrasi, akun admin & data contoh**: di *Settings → Deploy → Pre-deploy Command* isi
+   `php artisan rukoon:siapkan` (tambahkan `--contoh` atau variabel `SEED_CONTOH=true` untuk mengisi data contoh
+   RW 02 bila database masih kosong). Aman dijalankan setiap deploy.
+5. **Penjadwal** (tagihan bulanan & cek status QRIS): buat layanan kedua dari repo yang sama dengan
    *Custom Start Command* `php artisan schedule:work` dan variabel yang sama (bisa memakai *Shared Variables*).
 
 ### Mencoba dengan data contoh (opsional, jangan di server produksi)
