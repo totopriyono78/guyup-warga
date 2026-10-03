@@ -39,9 +39,16 @@
                             <p class="flex-1 text-slate-600">Pilih rumah di daftar lalu klik atapnya di peta, <b>atau</b> klik langsung di peta untuk membuat rumah baru.</p>
                         </template>
                     </div>
-                    <div x-ref="peta" class="h-[72vh] min-h-[440px] w-full"></div>
+                    <div class="relative">
+                        <div x-ref="peta" class="h-[72vh] min-h-[440px] w-full"></div>
+                        <div x-cloak x-show="menyeret" class="pointer-events-none absolute inset-0 z-[500] rounded-b-2xl ring-4 ring-inset transition"
+                             :class="diAtasPeta ? 'ring-amber-400 bg-amber-300/10' : 'ring-brand-400/60'">
+                            <p class="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-slate-900/85 px-3 py-1.5 text-xs font-medium text-white shadow"
+                               x-text="diAtasPeta ? 'Lepaskan di atap rumah ' + (seretKode || '') : 'Bawa ke peta lalu lepaskan di atap rumahnya'"></p>
+                        </div>
+                    </div>
                 </div>
-                <p class="mt-2 text-xs text-slate-500">Tip: perbesar peta sampai atap rumah terlihat jelas. Titik rumah bisa digeser (drag) untuk merapikan posisi.</p>
+                <p class="mt-2 text-xs text-slate-500">Tip: perbesar peta sampai atap rumah terlihat jelas. Titik rumah bisa digeser (drag) untuk merapikan posisi. Rumah di daftar juga bisa <b>diseret langsung ke peta</b>.</p>
             </div>
 
             {{-- Panel samping --}}
@@ -114,12 +121,18 @@
                         </div>
                         <input x-model="filter" type="search" placeholder="Cari kode (A-12) atau nama…" class="input">
                         <label class="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" x-model="hanyaBelum" class="rounded border-slate-300 text-brand-700"> Hanya yang belum ada titik</label>
+                        <p class="flex items-start gap-1.5 rounded-lg bg-brand-50 px-2.5 py-2 text-xs text-brand-900">
+                            <x-icon name="grip" class="mt-0.5 size-3.5 shrink-0 stroke-[3]" />
+                            <span>Seret rumah dari daftar ini lalu lepaskan di atap rumahnya di peta.<span class="lg:hidden"> Di HP: tekan-tahan sebentar, lalu geser.</span></span>
+                        </p>
                     </div>
                     <ul class="max-h-[46vh] divide-y divide-slate-100 overflow-y-auto">
                         <template x-for="r in daftar()" :key="r.id">
-                            <li class="flex items-center gap-2 px-3 py-2 text-sm" :class="dipilih === r.id ? 'bg-yellow-50' : ''">
+                            <li class="sw-seret flex cursor-grab items-center gap-2 px-3 py-2 text-sm" :class="{ 'bg-yellow-50': dipilih === r.id, 'opacity-40': seretId === r.id }"
+                                @pointerdown="mulaiSeret($event, r.id)" @contextmenu.prevent>
+                                <x-icon name="grip" class="size-4 shrink-0 stroke-[3] text-slate-300" />
                                 <span class="size-2.5 shrink-0 rounded-full" :class="r.lat !== null ? 'bg-emerald-500' : 'bg-slate-300'" :title="r.lat !== null ? 'Sudah ada titik' : 'Belum ada titik'"></span>
-                                <button type="button" class="min-w-0 flex-1 text-left" @click="pilih(r.id)">
+                                <button type="button" class="min-w-0 flex-1 text-left" @click="if (!barusSeret()) pilih(r.id)">
                                     <span class="font-semibold text-slate-900" x-text="r.kode"></span>
                                     <span class="text-xs text-slate-400" x-text="'RT ' + r.rt"></span>
                                     <span class="block truncate text-xs text-slate-500" x-text="r.kk || 'Belum ada KK'"></span>
@@ -177,14 +190,20 @@
         <script>
             function editorPeta(o) {
                 const csrf = document.querySelector('meta[name="csrf-token"]').content;
+                // status seret (berisi elemen DOM) disimpan di luar state Alpine
+                let S = null;
+                let waktuSeret = 0;
 
                 return {
                     o, rumahs: o.rumahs, map: null, marker: {}, kandidat: null, jumlahKandidat: 0,
                     dipilih: null, filter: '', hanyaBelum: false, q: '', hasilCari: [], mencari: false, mengimpor: false,
                     baru: null, formBaru: { blok_id: null, nomor: '', status_hunian: 'dihuni' }, galatBaru: '', menyimpan: false,
                     pesan: '', pesanGagal: false,
+                    menyeret: false, diAtasPeta: false, seretId: null, seretKode: '',
 
                     async init() {
+                        // cegah halaman menggulir saat rumah sedang diseret di layar sentuh
+                        window.addEventListener('touchmove', e => { if (S?.aktif) e.preventDefault() }, { passive: false });
                         this.map = await SiwargaPeta.buat(this.$refs.peta, o.peta);
                         this.kandidat = L.layerGroup().addTo(this.map);
                         const titik = [];
@@ -214,6 +233,97 @@
                     },
                     batal() { this.dipilih = null; this.baru = null; this.segarkanIkon(); },
                     fokus(r) { this.map.setView([r.lat, r.lng], Math.max(this.map.getZoom(), 19)); },
+
+                    // ---------- seret rumah dari daftar ke peta ----------
+                    barusSeret() { return Date.now() - waktuSeret < 150 },
+                    mulaiSeret(e, id) {
+                        if (e.target.closest('button:not(.min-w-0), a, input') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+                        S = { id, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, aktif: false, sentuh: e.pointerType !== 'mouse', daftar: e.currentTarget.closest('ul') };
+                        if (S.sentuh) S.timer = setTimeout(() => S && this.aktifkanSeret(), 300);
+                        const gerak = ev => this.geserSeret(ev);
+                        const lepas = () => this.lepasSeret();
+                        const batal = () => { if (!S?.aktif) this.akhiriSeret() };
+                        S.lepasPendengar = () => {
+                            window.removeEventListener('pointermove', gerak);
+                            window.removeEventListener('pointerup', lepas);
+                            window.removeEventListener('pointercancel', batal);
+                        };
+                        window.addEventListener('pointermove', gerak);
+                        window.addEventListener('pointerup', lepas);
+                        window.addEventListener('pointercancel', batal);
+                    },
+                    aktifkanSeret() {
+                        const r = this.rumahs.find(x => x.id === S.id);
+                        if (!r) return this.akhiriSeret();
+                        // penanda yang ujung bawahnya tepat di bawah jari/kursor
+                        const g = document.createElement('div');
+                        g.setAttribute('x-ignore', '');
+                        g.className = 'sw-ghost-pin';
+                        g.innerHTML = '<span></span>';
+                        g.firstChild.textContent = r.kode;
+                        g.firstChild.style.background = r.warna || '#0f766e';
+                        document.body.appendChild(g);
+                        Object.assign(S, { aktif: true, ghost: g });
+                        this.menyeret = true; this.seretId = r.id; this.seretKode = r.kode;
+                        document.body.classList.add('sw-menyeret');
+                        navigator.vibrate?.(25);
+                        this.posisiGhost();
+                        const putar = () => {
+                            if (!S?.aktif) return;
+                            // gulir otomatis di tepi layar (di HP peta ada di atas daftar)
+                            const tepi = 70, h = window.innerHeight;
+                            if (S.y < tepi) window.scrollBy(0, -Math.ceil((tepi - S.y) / 4));
+                            else if (S.y > h - tepi) window.scrollBy(0, Math.ceil((S.y - (h - tepi)) / 4));
+                            this.cekDiAtasPeta();
+                            S.raf = requestAnimationFrame(putar);
+                        };
+                        S.raf = requestAnimationFrame(putar);
+                    },
+                    geserSeret(e) {
+                        if (!S) return;
+                        S.x = e.clientX; S.y = e.clientY;
+                        if (!S.aktif) {
+                            const jauh = Math.hypot(S.x - S.x0, S.y - S.y0);
+                            if (S.sentuh && jauh > 10) return this.akhiriSeret(); // sedang menggulir daftar
+                            if (!S.sentuh && jauh > 5) this.aktifkanSeret();
+                            if (!S?.aktif) return;
+                        }
+                        this.posisiGhost();
+                        this.cekDiAtasPeta();
+                    },
+                    posisiGhost() {
+                        S.ghost.style.left = S.x + 'px';
+                        S.ghost.style.top = S.y + 'px';
+                    },
+                    cekDiAtasPeta() {
+                        const b = this.$refs.peta.getBoundingClientRect();
+                        const di = S.x >= b.left && S.x <= b.right && S.y >= b.top && S.y <= b.bottom;
+                        if (di !== this.diAtasPeta) this.diAtasPeta = di;
+                    },
+                    lepasSeret() {
+                        if (!S) return;
+                        const { aktif, id, x, y } = S;
+                        const diPeta = aktif && this.diAtasPeta;
+                        this.akhiriSeret();
+                        if (!aktif) return;
+                        waktuSeret = Date.now();
+                        const r = this.rumahs.find(x => x.id === id);
+                        if (!r) return;
+                        if (!diPeta) { this.kabar('Lepaskan rumah di dalam peta untuk menandai lokasinya.', true); return; }
+                        const p = this.map.mouseEventToLatLng({ clientX: x, clientY: y });
+                        if (this.dipilih === id) this.dipilih = null;
+                        this.simpanLokasi(r, p.lat, p.lng, true);
+                    },
+                    akhiriSeret() {
+                        if (!S) return;
+                        clearTimeout(S.timer);
+                        cancelAnimationFrame(S.raf);
+                        S.lepasPendengar();
+                        S.ghost?.remove();
+                        document.body.classList.remove('sw-menyeret');
+                        this.menyeret = false; this.diAtasPeta = false; this.seretId = null;
+                        S = null;
+                    },
 
                     // ---------- marker ----------
                     pasangMarker(r) {
