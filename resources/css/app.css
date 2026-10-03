@@ -85,3 +85,10 @@ body { -webkit-tap-highlight-color: transparent; }
 .sw-pin-sorot .sw-pin { transform: scale(1.35); box-shadow: 0 0 0 4px #facc15, 0 1px 3px rgba(0, 0, 0, .45); }
 .leaflet-container { font-family: inherit; }
 .leaflet-container a.sw-link { color: #0f766e; font-weight: 600; }
+
+/* ---------- Menu samping bisa disembunyikan (layar lebar) ---------- */
+@media (min-width: 1024px) {
+  html.sb-tutup #sidebar-desktop { display: none; }
+  html.sb-tutup #konten { padding-left: 0; }
+  html.sb-tutup #konten > main { max-width: none; }
+}

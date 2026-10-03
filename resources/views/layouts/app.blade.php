@@ -29,13 +29,24 @@
     <title>@yield('title', 'Beranda') · {{ $namaRw }}</title>
     @include('layouts.partials.ikon')
     <link rel="stylesheet" href="{{ asset('css/app.css') }}?v={{ @filemtime(public_path('css/app.css')) }}">
+    <script>try { if (localStorage.getItem('rukoon.sidebar') === 'tutup') document.documentElement.classList.add('sb-tutup'); } catch (e) {}</script>
     <script defer src="{{ asset('js/alpine.min.js') }}"></script>
     @stack('head')
 </head>
-<body class="h-full font-sans text-slate-800 antialiased" x-data="{ menu: false }">
+<body class="h-full font-sans text-slate-800 antialiased" x-data="{
+    menu: false,
+    tutup: document.documentElement.classList.contains('sb-tutup'),
+    toggleSidebar() {
+        this.tutup = !this.tutup;
+        document.documentElement.classList.toggle('sb-tutup', this.tutup);
+        try { localStorage.setItem('rukoon.sidebar', this.tutup ? 'tutup' : 'buka'); } catch (e) {}
+        // beri tahu peta (Leaflet) agar menyesuaikan ukurannya
+        requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    },
+}">
 <div class="min-h-full">
     {{-- Sidebar desktop --}}
-    <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
+    <aside id="sidebar-desktop" class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
         @include('layouts.partials.sidebar')
     </aside>
 
@@ -49,11 +60,15 @@
         </aside>
     </div>
 
-    <div class="lg:pl-64">
+    <div id="konten" class="lg:pl-64">
         {{-- Topbar --}}
         <header class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur sm:px-6">
             <button type="button" class="btn btn-ghost -ml-2 p-2 lg:hidden" @click="menu = true" aria-label="Buka menu">
                 <x-icon name="menu" class="size-6" />
+            </button>
+            <button type="button" class="btn btn-ghost -ml-2 hidden p-2 lg:inline-flex" @click="toggleSidebar()"
+                    :title="tutup ? 'Tampilkan menu samping' : 'Sembunyikan menu samping'" :aria-pressed="tutup.toString()" aria-label="Tampilkan/sembunyikan menu samping">
+                <x-icon name="sidebar" class="size-6 transition-transform" ::class="tutup ? '' : 'rotate-180'" />
             </button>
             <form action="{{ route('cari') }}" method="get" class="flex-1">
                 <label class="relative block max-w-md">
@@ -62,6 +77,9 @@
                            placeholder="Cari warga atau rumah…" class="input rounded-full pl-9">
                 </label>
             </form>
+            <a href="{{ route('publik') }}" class="btn btn-ghost shrink-0 gap-1.5 px-2.5 sm:px-3" title="Kembali ke website">
+                <x-icon name="globe" class="size-5" /> <span class="hidden text-sm sm:inline">Website</span>
+            </a>
         </header>
 
         <main class="mx-auto max-w-7xl px-4 py-5 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 lg:py-8 lg:pb-10">

@@ -29,6 +29,15 @@
         }
     }
 
+    // Objek Leaflet tidak boleh dibungkus reaktivitas Alpine (Proxy). Bila terbungkus, pendengar event
+    // gagal dilepas saat marker diganti, sehingga animasi zoom error dan titik tidak ikut bergerak.
+    // Penanda __v_skip dihormati oleh @vue/reactivity yang dipakai Alpine.
+    if (window.L) {
+        L.Map.prototype.__v_skip = true;
+        L.Layer.prototype.__v_skip = true;
+        if (L.Control) L.Control.prototype.__v_skip = true;
+    }
+
     window.SiwargaPeta = {
         WARNA,
         esc,
