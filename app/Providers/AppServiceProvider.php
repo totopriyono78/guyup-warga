@@ -19,6 +19,15 @@ class AppServiceProvider extends ServiceProvider
     {
         Carbon::setLocale(config('app.locale', 'id'));
         \Illuminate\Http\Middleware\TrustProxies::at(config('siwarga.trusted_proxies'));
+
+        // Di belakang proxy HTTPS (Railway, Render, Cloudflare, dll.) paksa semua URL memakai https
+        // bila APP_URL https atau FORCE_HTTPS=true, supaya CSS/JS tidak diblokir sebagai "mixed content".
+        if (config('siwarga.force_https')) {
+            \Illuminate\Support\Facades\URL::forceScheme('https');
+            if (str_starts_with((string) config('app.url'), 'https://')) {
+                \Illuminate\Support\Facades\URL::forceRootUrl(rtrim((string) config('app.url'), '/'));
+            }
+        }
         Paginator::defaultView('components.pagination');
 
         // Hosting tanpa akses terminal (mis. Railway): buat tautan public/storage otomatis bila belum ada

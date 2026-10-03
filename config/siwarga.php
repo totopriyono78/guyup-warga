@@ -29,6 +29,9 @@ return [
 
     // IP reverse proxy yang dipercaya (pisahkan koma). Default hanya localhost.
     // Isi bila memakai load balancer / Cloudflare, mis. "10.0.0.0/8,173.245.48.0/20"
+    // Paksa URL https (otomatis aktif bila APP_URL diawali https:// di production). FORCE_HTTPS=false untuk mematikan.
+    'force_https' => filter_var(env('FORCE_HTTPS', env('APP_ENV') === 'production' && str_starts_with((string) env('APP_URL', ''), 'https://')), FILTER_VALIDATE_BOOL),
+
     // "*" = percayai semua proxy (wajib di Railway/Render/Fly karena HTTPS diakhiri di load balancer mereka)
     'trusted_proxies' => trim((string) env('TRUSTED_PROXIES', '127.0.0.1,::1')) === '*'
         ? '*'

@@ -96,6 +96,7 @@ menjalankan `npm run build`, `php artisan migrate --force`, dan seeder admin sec
    DB_CONNECTION=pgsql
    DB_URL=${{Postgres.DATABASE_URL}}
    TRUSTED_PROXIES=*             # wajib: HTTPS diakhiri di proxy Railway
+   FORCE_HTTPS=true              # semua URL (CSS/JS/form) memakai https
    SESSION_SECURE_COOKIE=true
    LOG_CHANNEL=stderr            # log tampil di tab Logs Railway
    ADMIN_EMAIL=admin@domain.id
