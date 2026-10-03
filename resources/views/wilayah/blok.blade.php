@@ -17,6 +17,9 @@
                         <b>Geser</b> petak rumah ke posisi lain (atau ketuk petak lalu ketuk tujuan). Geser ke petak kosong = pindah posisi.
                         Geser ke rumah lain = pilih <b>tukar posisi</b> atau <b>tukar nomor</b>. Ketuk dua kali petak untuk mengganti nomor.
                     </p>
+                    <a href="{{ route('denah', ['tampilan' => 'blok', 'susun' => 1]) }}" class="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline">
+                        <x-icon name="refresh" class="size-3.5" /> Pindahkan rumah ke blok lain →
+                    </a>
                 </div>
 
                 {{-- Bilah status --}}

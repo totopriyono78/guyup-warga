@@ -25,7 +25,7 @@
         ];
     @endphp
 
-    <div x-data="denah(@js($detail), @js($peta), @js($tampilan), @js(config('siwarga.peta.warga')))" @keydown.escape.window="tutup()">
+    <div x-data="denah(@js($detail), @js($peta), @js($tampilan), @js(config('siwarga.peta.warga')), @js($susun ? route('denah.pindah') : null))" @keydown.escape.window="tutup()">
         <x-page-header judul="Denah Wilayah" sub="Ketuk titik atau petak rumah untuk melihat penghuninya.">
             <div class="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-sm">
                 <a href="{{ request()->fullUrlWithQuery(['tampilan' => 'peta']) }}" class="rounded-md px-3 py-1.5 {{ $tampilan === 'peta' ? 'bg-brand-700 text-white' : 'text-slate-600' }}"><x-icon name="map" class="-mt-0.5 inline size-4" /> Peta</a>
@@ -36,7 +36,13 @@
                     <a href="{{ request()->fullUrlWithQuery(['mode' => 'hunian']) }}" class="rounded-md px-3 py-1.5 {{ $mode === 'hunian' ? 'bg-brand-700 text-white' : 'text-slate-600' }}">Hunian</a>
                     <a href="{{ request()->fullUrlWithQuery(['mode' => 'iuran']) }}" class="rounded-md px-3 py-1.5 {{ $mode === 'iuran' ? 'bg-brand-700 text-white' : 'text-slate-600' }}">Iuran {{ now()->translatedFormat('M') }}</a>
                 </div>
-                <a href="{{ route('peta.edit') }}" class="btn btn-secondary"><x-icon name="pencil" class="size-4" /> Atur titik rumah</a>
+                @if ($tampilan === 'blok')
+                    <a href="{{ request()->fullUrlWithQuery(['susun' => $susun ? null : 1]) }}" class="btn {{ $susun ? 'btn-primary' : 'btn-secondary' }}">
+                        @if ($susun)<x-icon name="check" class="size-4" /> Selesai memindah @else<x-icon name="refresh" class="size-4" /> Pindah rumah @endif
+                    </a>
+                @else
+                    <a href="{{ route('peta.edit') }}" class="btn btn-secondary"><x-icon name="pencil" class="size-4" /> Atur titik rumah</a>
+                @endif
             @endif
         </x-page-header>
 
@@ -112,16 +118,32 @@
             </div>
         @endif
 
-        <div class="grid grid-cols-1 gap-5 xl:grid-cols-2" @if ($tampilan !== 'blok') style="display:none" @endif>
+        @if ($susun)
+            <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <p class="font-semibold">Mode pindah rumah aktif</p>
+                <p class="mt-0.5">Seret petak rumah ke <b>petak kosong</b> (bergaris putus-putus) untuk memindahkannya, atau ke <b>rumah lain</b> untuk bertukar tempat, di blok yang sama maupun blok lain. Keluarga yang terdata ikut pindah bersama rumahnya; titik di peta tidak berubah.</p>
+                <p class="mt-1 text-xs text-amber-800 sm:hidden">Di HP: tekan dan tahan petak sebentar sampai terangkat, lalu geser.</p>
+            </div>
+        @endif
+
+        <script type="application/json" id="denah-data">@json($detail)</script>
+        <div id="denah-blok" class="grid grid-cols-1 gap-5 xl:grid-cols-2" @if ($tampilan !== 'blok') style="display:none" @endif
+             @if ($susun) @pointerdown="mulaiSeret($event)" @contextmenu="if ($event.target.closest('[data-rumah]')) $event.preventDefault()" @endif>
             @foreach ($bloks as $blok)
                 @php
+                    $bisaSusun = $susun && $u->canManageRt($blok->rt_id);
                     $maxKolom = max(1, (int) $blok->rumahs->max('kolom'));
                     $maxBaris = max(1, (int) $blok->rumahs->max('baris'));
+                    if ($bisaSusun) {
+                        // sediakan satu baris & satu kolom cadangan sebagai tempat tujuan baru
+                        [$maxKolom, $maxBaris] = $blok->rumahs->isEmpty() ? [4, 2] : [$maxKolom + 1, $maxBaris + 1];
+                    }
                     // setiap 2 baris rumah diselingi 1 baris jalan
                     $barisGrid = fn ($b) => $b + intdiv($b - 1, 2);
                     $totalGrid = $barisGrid($maxBaris);
+                    $terpakai = $blok->rumahs->map(fn ($r) => $r->baris.'-'.$r->kolom)->flip();
                 @endphp
-                <section class="card overflow-hidden">
+                <section class="card overflow-hidden" data-blok-nama="{{ $blok->nama }}">
                     <header class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3" style="border-top: 4px solid {{ $blok->rt->warna }}">
                         <div>
                             <h2 class="font-semibold text-slate-900">Blok {{ $blok->nama }}</h2>
@@ -132,22 +154,37 @@
                         @endif
                     </header>
                     <div class="overflow-x-auto p-3 sm:p-4">
-                        @if ($blok->rumahs->isEmpty())
+                        @if ($blok->rumahs->isEmpty() && ! $bisaSusun)
                             <p class="py-6 text-center text-sm text-slate-500">Belum ada rumah di blok ini.</p>
                         @else
+                            @if ($blok->rumahs->isEmpty())
+                                <p class="mb-2 text-center text-xs text-slate-500">Blok ini masih kosong. Seret rumah ke salah satu petak di bawah.</p>
+                            @endif
                             <div class="grid gap-1 sm:gap-1.5" style="grid-template-columns: repeat({{ $maxKolom }}, minmax(2.5rem, 1fr)); grid-template-rows: repeat({{ $totalGrid }}, auto); min-width: {{ $maxKolom * 2.75 }}rem">
                                 @for ($b = 2; $b < $maxBaris; $b += 2)
                                     <div class="flex h-6 items-center justify-center rounded bg-slate-100 text-[10px] uppercase tracking-[0.3em] text-slate-400"
                                          style="grid-row: {{ $barisGrid($b) + 1 }}; grid-column: 1 / -1">jalan</div>
                                 @endfor
+                                @if ($bisaSusun)
+                                    @for ($b = 1; $b <= $maxBaris; $b++)
+                                        @for ($k = 1; $k <= $maxKolom; $k++)
+                                            @unless (isset($terpakai[$b.'-'.$k]))
+                                                <div data-slot data-blok="{{ $blok->id }}" data-baris="{{ $b }}" data-kolom="{{ $k }}"
+                                                     class="sw-slot aspect-[4/5] min-h-12 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50/60"
+                                                     style="grid-row: {{ $barisGrid($b) }}; grid-column: {{ $k }}"></div>
+                                            @endunless
+                                        @endfor
+                                    @endfor
+                                @endif
                                 @foreach ($blok->rumahs as $rumah)
                                     @php
                                         $d = $detail[$rumah->id];
                                         $kat = $d['kat'];
                                         $kelas = ($mode === 'iuran' ? $warnaIuran : $warnaHunian)[$kat];
                                     @endphp
-                                    <button type="button" id="rumah-{{ $rumah->id }}" @click="buka({{ $rumah->id }})"
-                                            class="relative flex aspect-[4/5] min-h-12 flex-col items-center justify-center rounded-lg border-2 px-1 text-center transition {{ $kelas }}"
+                                    <button type="button" id="rumah-{{ $rumah->id }}" @click="klikRumah({{ $rumah->id }})"
+                                            @if ($bisaSusun) data-rumah="{{ $rumah->id }}" @endif
+                                            class="relative flex aspect-[4/5] min-h-12 flex-col items-center justify-center rounded-lg border-2 px-1 text-center transition {{ $kelas }} {{ $bisaSusun ? 'sw-seret cursor-grab' : '' }}"
                                             :class="{ 'ring-4 ring-yellow-400 ring-offset-1 scale-105 z-10': cocok({{ $rumah->id }}), 'opacity-30': sorot.length > 1 && !cocok({{ $rumah->id }}) }"
                                             style="grid-row: {{ $barisGrid($rumah->baris) }}; grid-column: {{ $rumah->kolom }}"
                                             title="{{ $d['kode'] }}{{ $d['namaSingkat'] ? ' · '.$d['namaSingkat'] : '' }}">
@@ -166,6 +203,31 @@
                 </section>
             @endforeach
         </div>
+
+        @if ($susun)
+            {{-- Nomor bentrok saat pindah ke blok lain --}}
+            <div x-cloak x-show="tanya" class="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center" @click.self="tanya = null">
+                <template x-if="tanya">
+                <form class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" @submit.prevent="kirim({ ...tanya.payload, nomor: tanya.nomor }); tanya = null">
+                    <h3 class="font-semibold text-slate-900">Nomor rumah sudah dipakai</h3>
+                    <p class="mt-1 text-sm text-slate-600" x-text="tanya.pesan"></p>
+                    <label class="mt-4 block text-sm font-medium text-slate-700">Nomor baru di Blok <span x-text="tanya.blok"></span>
+                        <input type="text" maxlength="10" required class="input mt-1" x-model="tanya.nomor" x-init="$nextTick(() => $el.select())">
+                    </label>
+                    <div class="mt-4 flex justify-end gap-2">
+                        <button type="button" class="btn btn-secondary" @click="tanya = null">Batal</button>
+                        <button class="btn btn-primary">Pindahkan</button>
+                    </div>
+                </form>
+                </template>
+            </div>
+
+            {{-- Notifikasi --}}
+            <div x-cloak x-show="pesan" x-transition.opacity
+                 class="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-50 mx-auto max-w-md rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg lg:bottom-6"
+                 :class="pesan?.ok ? 'bg-emerald-700' : 'bg-rose-700'" x-text="pesan?.teks"></div>
+            <div x-cloak x-show="sibuk" class="fixed right-4 top-16 z-50 rounded-full bg-slate-900/80 px-3 py-1.5 text-xs text-white">Menyimpan…</div>
+        @endif
 
         {{-- Panel detail rumah --}}
         <div x-cloak x-show="aktif" class="fixed inset-0 z-40">
@@ -246,10 +308,19 @@
 
     @push('scripts')
         <script>
-            function denah(data, peta, tampilan, privasi) {
+            function denah(data, peta, tampilan, privasi, urlPindah) {
+                // status seret disimpan di luar state Alpine (berisi elemen DOM, tidak perlu reaktif)
+                let S = null;
+                let barusSeret = false;
+
                 return {
                     data, aktif: null, zoom: null, sorot: '', map: null, marker: {},
+                    tanya: null, pesan: null, sibuk: false,
                     init() {
+                        if (urlPindah) {
+                            // cegah halaman ikut menggulir saat petak sedang diseret di layar sentuh
+                            window.addEventListener('touchmove', e => { if (S?.aktif) e.preventDefault() }, { passive: false });
+                        }
                         if (tampilan === 'peta' && this.$refs.peta && window.L) this.siapkanPeta();
                         this.$watch('sorot', () => this.sorotPeta());
                         const m = location.hash.match(/^#rumah-(\d+)$/);
@@ -287,6 +358,138 @@
                         if (pertama && this.map) this.map.panTo(this.marker[pertama].getLatLng());
                     },
                     buka(id) { this.aktif = this.data[id] || null },
+                    klikRumah(id) { if (!barusSeret) this.buka(id) },
+
+                    // ---------- Seret & lepas rumah (mode pindah) ----------
+                    mulaiSeret(e) {
+                        const el = e.target.closest('[data-rumah]');
+                        if (!el || this.sibuk || (e.pointerType === 'mouse' && e.button !== 0)) return;
+                        S = { id: +el.dataset.rumah, el, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, aktif: false, sentuh: e.pointerType !== 'mouse', target: null };
+                        if (S.sentuh) S.timer = setTimeout(() => S && this.aktifkanSeret(), 300);
+                        const gerak = ev => this.geserSeret(ev);
+                        const lepas = () => this.lepasSeret();
+                        const batal = () => { if (!S?.aktif) this.akhiriSeret() };
+                        S.lepasPendengar = () => {
+                            window.removeEventListener('pointermove', gerak);
+                            window.removeEventListener('pointerup', lepas);
+                            window.removeEventListener('pointercancel', batal);
+                        };
+                        window.addEventListener('pointermove', gerak);
+                        window.addEventListener('pointerup', lepas);
+                        window.addEventListener('pointercancel', batal);
+                    },
+                    aktifkanSeret() {
+                        const r = S.el.getBoundingClientRect();
+                        const g = S.el.cloneNode(true);
+                        g.removeAttribute('id');
+                        g.removeAttribute('data-rumah');
+                        g.setAttribute('x-ignore', ''); // salinan di luar komponen; jangan diproses Alpine
+                        Object.assign(g.style, {
+                            position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px',
+                            margin: 0, zIndex: 70, pointerEvents: 'none', opacity: '.92', transform: 'rotate(4deg) scale(1.08)',
+                            boxShadow: '0 12px 28px rgba(15,23,42,.35)', transition: 'none', gridRow: 'auto', gridColumn: 'auto',
+                        });
+                        document.body.appendChild(g);
+                        Object.assign(S, { aktif: true, ghost: g, dx: S.x - r.left, dy: S.y - r.top });
+                        S.el.classList.add('sw-asal');
+                        document.body.classList.add('sw-menyeret');
+                        navigator.vibrate?.(25);
+                        const putar = () => {
+                            if (!S?.aktif) return;
+                            // gulir otomatis saat mendekati tepi layar
+                            const tepi = 70, h = window.innerHeight;
+                            if (S.y < tepi) window.scrollBy(0, -Math.ceil((tepi - S.y) / 4));
+                            else if (S.y > h - tepi) window.scrollBy(0, Math.ceil((S.y - (h - tepi)) / 4));
+                            this.cariTarget();
+                            S.raf = requestAnimationFrame(putar);
+                        };
+                        S.raf = requestAnimationFrame(putar);
+                    },
+                    geserSeret(e) {
+                        if (!S) return;
+                        S.x = e.clientX; S.y = e.clientY;
+                        const jauh = Math.hypot(S.x - S.x0, S.y - S.y0);
+                        if (!S.aktif) {
+                            if (S.sentuh && jauh > 10) return this.akhiriSeret(); // pengguna sedang menggulir
+                            if (!S.sentuh && jauh > 5) this.aktifkanSeret();
+                            if (!S.aktif) return;
+                        }
+                        S.ghost.style.left = (S.x - S.dx) + 'px';
+                        S.ghost.style.top = (S.y - S.dy) + 'px';
+                        this.cariTarget();
+                    },
+                    cariTarget() {
+                        let t = document.elementFromPoint(S.x, S.y)?.closest('[data-slot],[data-rumah]') || null;
+                        if (t === S.el) t = null;
+                        if (t !== S.target) {
+                            S.target?.classList.remove('sw-drop');
+                            t?.classList.add('sw-drop');
+                            S.target = t;
+                        }
+                    },
+                    lepasSeret() {
+                        if (!S) return;
+                        const { aktif, target, id } = S;
+                        this.akhiriSeret();
+                        if (!aktif) return;
+                        barusSeret = true;
+                        setTimeout(() => barusSeret = false, 80);
+                        if (!target) return;
+                        this.kirim(target.dataset.rumah !== undefined
+                            ? { aksi: 'tukar', rumah_id: id, target_id: +target.dataset.rumah }
+                            : { aksi: 'pindah', rumah_id: id, blok_id: +target.dataset.blok, baris: +target.dataset.baris, kolom: +target.dataset.kolom });
+                    },
+                    akhiriSeret() {
+                        if (!S) return;
+                        clearTimeout(S.timer);
+                        cancelAnimationFrame(S.raf);
+                        S.lepasPendengar();
+                        S.ghost?.remove();
+                        S.el.classList.remove('sw-asal');
+                        S.target?.classList.remove('sw-drop');
+                        document.body.classList.remove('sw-menyeret');
+                        S = null;
+                    },
+                    async kirim(payload) {
+                        this.sibuk = true;
+                        try {
+                            const res = await fetch(urlPindah, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+                                body: JSON.stringify(payload),
+                            });
+                            const json = await res.json().catch(() => ({}));
+                            if (res.ok) {
+                                await this.muatUlang();
+                                this.beriPesan(json.pesan || 'Tersimpan.', true);
+                            } else if (json.nomor_bentrok) {
+                                this.tanya = { payload, pesan: json.message, nomor: json.saran, blok: json.blok };
+                            } else {
+                                const err = json.errors ? Object.values(json.errors)[0][0] : (json.message || 'Gagal menyimpan. Coba lagi.');
+                                this.beriPesan(res.status === 419 ? 'Sesi kedaluwarsa. Muat ulang halaman.' : err, false);
+                            }
+                        } catch (e) {
+                            this.beriPesan('Tidak terhubung ke server. Periksa koneksi lalu coba lagi.', false);
+                        } finally {
+                            this.sibuk = false;
+                        }
+                    },
+                    async muatUlang() {
+                        const html = await (await fetch(location.href, { headers: { 'Accept': 'text/html' } })).text();
+                        const doc = new DOMParser().parseFromString(html, 'text/html');
+                        const baru = doc.getElementById('denah-blok');
+                        if (!baru) return location.reload();
+                        const wadah = document.getElementById('denah-blok');
+                        // lepaskan efek Alpine dari petak lama sebelum diganti, agar tidak dievaluasi tanpa konteks
+                        [...wadah.children].forEach(el => window.Alpine?.destroyTree?.(el));
+                        wadah.innerHTML = baru.innerHTML;
+                        this.data = JSON.parse(doc.getElementById('denah-data').textContent);
+                    },
+                    beriPesan(teks, ok) {
+                        this.pesan = { teks, ok };
+                        clearTimeout(this._t);
+                        this._t = setTimeout(() => this.pesan = null, ok ? 3500 : 6000);
+                    },
                     tutup() { this.aktif = null; this.zoom = null },
                     inisial(n) { return (n || '?').split(/\s+/).slice(0, 2).map(k => k[0]).join('').toUpperCase() },
                     cocok(id) {

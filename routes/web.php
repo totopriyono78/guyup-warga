@@ -98,6 +98,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('wilayah/blok/{blok}', [BlokController::class, 'destroy'])->name('blok.destroy');
         Route::post('wilayah/blok/{blok}/rumah', [RumahController::class, 'store'])->name('rumah.store');
         Route::post('wilayah/blok/{blok}/rumah-massal', [RumahController::class, 'storeMassal'])->name('rumah.massal');
+        Route::post('denah/pindah-rumah', [RumahController::class, 'pindahDenah'])->name('denah.pindah');
         Route::post('wilayah/blok/{blok}/susun', [RumahController::class, 'susun'])->name('blok.susun');
         Route::put('wilayah/rumah/{rumah}', [RumahController::class, 'update'])->name('rumah.update');
         Route::put('wilayah/rumah/{rumah}/lokasi', [RumahController::class, 'lokasi'])->name('rumah.lokasi');

@@ -92,3 +92,10 @@ body { -webkit-tap-highlight-color: transparent; }
   html.sb-tutup #konten { padding-left: 0; }
   html.sb-tutup #konten > main { max-width: none; }
 }
+
+/* ---------- Denah blok: seret & lepas rumah ---------- */
+.sw-seret { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.sw-asal { opacity: .3; }
+.sw-drop { outline: 3px solid #f59e0b; outline-offset: 2px; }
+.sw-slot.sw-drop { background: #fef3c7; border-color: #f59e0b; }
+body.sw-menyeret, body.sw-menyeret * { cursor: grabbing !important; -webkit-user-select: none; user-select: none; }

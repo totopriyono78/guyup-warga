@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Blok;
 use App\Models\Rumah;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -124,6 +125,102 @@ class RumahController extends Controller
         });
 
         return response()->json(['ok' => true, 'rumahs' => self::dataSusun($blok)]);
+    }
+
+    /**
+     * Pindahkan rumah lewat drag & drop di "Denah blok" (AJAX), di blok yang sama maupun antar blok.
+     * Keluarga (KK) tetap melekat pada rumahnya, jadi warga ikut pindah. Titik peta tidak berubah.
+     *  - pindah : rumah_id ke petak kosong blok_id/baris/kolom (opsional nomor baru bila nomornya bentrok)
+     *  - tukar  : rumah_id dan target_id bertukar tempat (blok + baris/kolom)
+     */
+    public function pindahDenah(Request $request)
+    {
+        $data = $request->validate([
+            'aksi' => ['required', Rule::in(['pindah', 'tukar'])],
+            'rumah_id' => ['required', 'integer'],
+            'target_id' => ['required_if:aksi,tukar', 'nullable', 'integer', 'different:rumah_id'],
+            'blok_id' => ['required_if:aksi,pindah', 'nullable', 'integer'],
+            'baris' => ['required_if:aksi,pindah', 'nullable', 'integer', 'min:1', 'max:50'],
+            'kolom' => ['required_if:aksi,pindah', 'nullable', 'integer', 'min:1', 'max:100'],
+            'nomor' => ['nullable', 'string', 'max:10'],
+        ]);
+
+        $pesan = DB::transaction(function () use ($data) {
+            $a = Rumah::query()->with('blok')->lockForUpdate()->findOrFail($data['rumah_id']);
+            $this->pastikanKelolaRt($a->blok->rt_id);
+            $asal = $a->blok;
+
+            if ($data['aksi'] === 'tukar') {
+                $b = Rumah::query()->with('blok')->lockForUpdate()->findOrFail($data['target_id']);
+                $this->pastikanKelolaRt($b->blok->rt_id);
+                $blokA = $a->blok;
+                $blokB = $b->blok;
+
+                if ($blokA->id !== $blokB->id) {
+                    foreach ([[$a, $blokB, $b], [$b, $blokA, $a]] as [$r, $tujuan, $kecuali]) {
+                        $bentrok = Rumah::query()->where('blok_id', $tujuan->id)->where('nomor', $r->nomor)
+                            ->whereKeyNot($kecuali->id)->exists();
+                        if ($bentrok) {
+                            throw ValidationException::withMessages([
+                                'nomor' => "Tidak bisa bertukar: nomor {$r->nomor} sudah ada di Blok {$tujuan->nama}. Seret ke petak kosong saja, nanti Anda bisa memberi nomor baru.",
+                            ]);
+                        }
+                    }
+                }
+
+                [$posA, $posB] = [[$a->blok_id, $a->baris, $a->kolom], [$b->blok_id, $b->baris, $b->kolom]];
+                // posisi & nomor sementara agar tidak bentrok dengan aturan unik
+                $nomorA = $a->nomor;
+                $a->update(['baris' => 0, 'kolom' => 0, 'nomor' => mb_substr('~'.$a->id, 0, 10)]);
+                $b->update(['blok_id' => $posA[0], 'baris' => $posA[1], 'kolom' => $posA[2]]);
+                $a->update(['blok_id' => $posB[0], 'baris' => $posB[1], 'kolom' => $posB[2], 'nomor' => $nomorA]);
+
+                return $blokA->id === $blokB->id
+                    ? "Rumah No. {$nomorA} dan No. {$b->nomor} bertukar tempat."
+                    : "Rumah {$blokA->nama}-{$nomorA} dan {$blokB->nama}-{$b->nomor} bertukar blok.";
+            }
+
+            $tujuan = Blok::query()->findOrFail($data['blok_id']);
+            $this->pastikanKelolaRt($tujuan->rt_id);
+
+            $terisi = Rumah::query()->where('blok_id', $tujuan->id)->where('baris', $data['baris'])
+                ->where('kolom', $data['kolom'])->whereKeyNot($a->id)->first();
+            if ($terisi) {
+                throw ValidationException::withMessages(['kolom' => "Petak itu sudah dipakai rumah No. {$terisi->nomor}."]);
+            }
+
+            $nomor = trim((string) ($data['nomor'] ?? '')) ?: $a->nomor;
+            $dipakai = Rumah::query()->where('blok_id', $tujuan->id)->where('nomor', $nomor)->whereKeyNot($a->id)->exists();
+            if ($dipakai) {
+                throw new HttpResponseException(response()->json([
+                    'message' => "Nomor {$nomor} sudah ada di Blok {$tujuan->nama}. Beri nomor baru untuk rumah ini.",
+                    'nomor_bentrok' => true,
+                    'saran' => self::saranNomor($tujuan->id),
+                    'blok' => $tujuan->nama,
+                ], 422));
+            }
+
+            $lama = $asal->nama.'-'.$a->nomor;
+            $a->update(['blok_id' => $tujuan->id, 'baris' => $data['baris'], 'kolom' => $data['kolom'], 'nomor' => $nomor]);
+
+            return $asal->id === $tujuan->id && $nomor === explode('-', $lama, 2)[1]
+                ? "Rumah {$lama} dipindah."
+                : "Rumah {$lama} dipindah ke Blok {$tujuan->nama} No. {$nomor}.";
+        });
+
+        return response()->json(['ok' => true, 'pesan' => $pesan]);
+    }
+
+    /** Nomor rumah berikutnya yang belum dipakai di blok (angka terbesar + 1). */
+    public static function saranNomor(int $blokId): string
+    {
+        $nomor = Rumah::query()->where('blok_id', $blokId)->pluck('nomor');
+        $n = (int) $nomor->map(fn ($x) => (int) preg_replace('/\D.*/', '', $x))->max() + 1;
+        while ($nomor->contains((string) $n)) {
+            $n++;
+        }
+
+        return (string) $n;
     }
 
     /** Data ringkas rumah di blok untuk editor susunan. */

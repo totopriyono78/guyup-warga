@@ -55,6 +55,7 @@ class DenahController extends Controller
 
                 $detail[$rumah->id] = [
                     'kode' => $blok->nama.'-'.$rumah->nomor,
+                    'kelola' => $kelola,
                     'alamat' => 'Blok '.$blok->nama.' No. '.$rumah->nomor.' · RT '.$blok->rt->nomor,
                     'status' => Rumah::STATUS[$rumah->status_hunian] ?? $rumah->status_hunian,
                     'kat' => $this->kategori($rumah, $mode, $kelola),
@@ -96,7 +97,11 @@ class DenahController extends Controller
             $tampilan = $adaLokasi ? 'peta' : 'blok';
         }
 
+        // Mode susun: pengurus memindah rumah antar petak/blok dengan seret & lepas
+        $susun = $pengurus && $tampilan === 'blok' && $request->boolean('susun');
+
         return view('denah.index', [
+            'susun' => $susun,
             'rts' => $rts,
             'rtId' => $rtId,
             'bloks' => $bloks,
