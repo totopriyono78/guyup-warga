@@ -1,0 +1,17 @@
+{
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "tailwindcss -i resources/css/app.css -o public/css/app.css --minify && node scripts/copy-vendor.js",
+        "dev": "tailwindcss -i resources/css/app.css -o public/css/app.css --watch"
+    },
+    "devDependencies": {
+        "@tailwindcss/cli": "^4.1.0",
+        "alpinejs": "^3.14.0",
+        "qrcode-generator": "^1.4.4",
+        "tailwindcss": "^4.1.0"
+    },
+    "dependencies": {
+        "leaflet": "^1.9.4"
+    }
+}

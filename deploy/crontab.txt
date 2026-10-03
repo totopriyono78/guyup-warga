@@ -1,0 +1,3 @@
+# Jalankan: crontab -u www-data -e   lalu tambahkan baris berikut
+# (Scheduler Laravel: buat tagihan tiap tanggal 1 & cek transaksi QRIS pending tiap 5 menit)
+* * * * * cd /var/www/siwarga && php artisan schedule:run >> /dev/null 2>&1
