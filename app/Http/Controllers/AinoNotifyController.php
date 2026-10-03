@@ -43,7 +43,14 @@ class AinoNotifyController extends Controller
             return $this->balas('403', 'Forbidden', 403);
         }
 
-        $orderId = $body['orderId'] ?? $body['order_id'] ?? null;
+        $orderId = $body['orderId'] ?? $body['order_id'] ?? $body['partnerReferenceNo'] ?? null;
+        // beberapa sistem mengirim UUID tanpa tanda hubung / huruf besar: normalkan
+        if (is_scalar($orderId) && preg_match('/^[0-9a-f]{32}$/i', (string) $orderId)) {
+            $h = strtolower((string) $orderId);
+            $orderId = substr($h, 0, 8).'-'.substr($h, 8, 4).'-'.substr($h, 12, 4).'-'.substr($h, 16, 4).'-'.substr($h, 20);
+        } elseif (is_scalar($orderId)) {
+            $orderId = strtolower((string) $orderId);
+        }
         if (! is_scalar($orderId) || ! Str::isUuid((string) $orderId)) {
             return $this->balas('400', 'Invalid Order ID', 400);
         }

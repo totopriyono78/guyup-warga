@@ -130,6 +130,7 @@ Route::middleware('auth')->group(function () {
         Route::post('donasi/{donasi}/donatur', [DonasiController::class, 'tambahDonatur'])->name('donasi.donatur.store');
         Route::delete('donasi-donatur/{donatur}', [DonasiController::class, 'hapusDonatur'])->name('donasi.donatur.destroy');
         Route::post('donasi-qris/{pembayaran}/cek', [DonasiController::class, 'cekQris'])->name('donasi.qris.cek')->whereUuid('pembayaran');
+        Route::post('donasi-qris/{pembayaran}/berhasil', [DonasiController::class, 'tandaiQrisBerhasil'])->name('donasi.qris.berhasil')->whereUuid('pembayaran');
 
         Route::resource('pengguna', PenggunaController::class)->except('show')->parameters(['pengguna' => 'pengguna']);
     });

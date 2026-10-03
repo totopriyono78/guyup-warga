@@ -66,7 +66,10 @@ class AinoClient
             'reference_no' => $referenceNo,
         ], 'inquiry');
 
-        if ((string) ($body['responseCode'] ?? '') !== self::KODE_INQUIRY_SUKSES) {
+        $kode = (string) ($body['responseCode'] ?? '');
+        // beberapa lingkungan AINO mengirim kode 200xxxx lain untuk inquiry yang berhasil
+        $berhasil = $kode === self::KODE_INQUIRY_SUKSES || (str_starts_with($kode, '200') && static::adaStatus($body));
+        if (! $berhasil) {
             throw new AinoException(
                 'Gagal cek status: '.($body['responseMessage'] ?? 'respons tidak dikenal'),
                 (string) ($body['responseCode'] ?? ''),
@@ -83,21 +86,27 @@ class AinoClient
      */
     public static function statusDariInquiry(array $body): string
     {
-        $desc = strtolower((string) ($body['transactionStatusDesc'] ?? ''));
+        $data = static::datar($body);
 
-        if ($desc !== '') {
-            return match ($desc) {
-                'paid', 'success', 'settlement' => 'paid',
-                'pending' => 'pending',
-                'expired' => 'expired',
-                'canceled', 'cancelled' => 'canceled',
-                'fail', 'failed' => 'failed',
-                default => 'pending', // status tak dikenal: jangan dianggap final
+        // 1) Teks status (transactionStatusDesc / statusLabel / transactionStatus / status)
+        // (kolom "status" umum sengaja tidak dipakai: sering berarti status panggilan API, bukan status transaksi)
+        foreach (['transactionStatusDesc', 'statusLabel', 'transactionStatus', 'paymentStatus'] as $k) {
+            $nilai = $data[strtolower($k)] ?? null;
+            if (is_string($nilai) && trim($nilai) !== '' && ! is_numeric($nilai)) {
+                return static::dariTeks($nilai);
+            }
+        }
+
+        // 2) statusCode seperti pada Finish Notify: 1 pending, 2 expired, 3 paid, 4 failed, 5 canceled
+        $kode = $data['statuscode'] ?? null;
+        if (is_scalar($kode) && (string) $kode !== '') {
+            return match ((string) $kode) {
+                '3' => 'paid', '2' => 'expired', '4' => 'failed', '5' => 'canceled', default => 'pending',
             };
         }
 
-        // Cadangan: kode latestTransactionStatus (00/02 sukses, 01 menunggu, 05 batal, 07 tidak ditemukan)
-        return match ((string) ($body['latestTransactionStatus'] ?? '')) {
+        // 3) Cadangan SNAP: latestTransactionStatus (00/02 sukses, 01 menunggu, 05 batal, 07 tidak ditemukan)
+        return match ((string) ($data['latesttransactionstatus'] ?? '')) {
             '00', '02' => 'paid',
             '05' => 'canceled',
             '07' => 'failed',
@@ -105,22 +114,94 @@ class AinoClient
         };
     }
 
+    private static function dariTeks(string $teks): string
+    {
+        $t = strtolower(trim($teks));
+
+        return match (true) {
+            in_array($t, ['paid', 'success', 'successful', 'settlement', 'settled', 'sukses', 'berhasil', 'lunas', 'completed', 'complete', 'capture'], true),
+            str_contains($t, 'success'), str_contains($t, 'paid') && ! str_contains($t, 'unpaid') => 'paid',
+            str_contains($t, 'expir'), str_contains($t, 'kedaluwarsa') => 'expired',
+            str_contains($t, 'cancel'), str_contains($t, 'batal') => 'canceled',
+            in_array($t, ['fail', 'failed', 'failure', 'gagal', 'rejected', 'declined'], true) => 'failed',
+            default => 'pending', // status tak dikenal: jangan dianggap final
+        };
+    }
+
+    /** Ada informasi status di respons? */
+    public static function adaStatus(array $body): bool
+    {
+        $d = static::datar($body);
+        foreach (['transactionstatusdesc', 'statuslabel', 'transactionstatus', 'paymentstatus', 'statuscode', 'latesttransactionstatus'] as $k) {
+            if (isset($d[$k]) && $d[$k] !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Ratakan respons (termasuk objek "data"/"result"/"transaction") menjadi [kunci_kecil => nilai skalar],
+     * supaya variasi format respons AINO tetap terbaca. Kunci tingkat atas didahulukan.
+     */
+    public static function datar(array $body): array
+    {
+        $hasil = [];
+        $tambah = function (array $arr) use (&$hasil) {
+            foreach ($arr as $k => $v) {
+                if (is_string($k) && (is_scalar($v) || $v === null) && ! array_key_exists(strtolower($k), $hasil)) {
+                    $hasil[strtolower($k)] = $v;
+                }
+            }
+        };
+        $tambah($body);
+        foreach (['data', 'result', 'transaction', 'transactionDetails', 'transaction_details', 'additionalInfo'] as $sub) {
+            if (isset($body[$sub]) && is_array($body[$sub])) {
+                $tambah($body[$sub]);
+            }
+        }
+
+        return $hasil;
+    }
+
     /** Nominal dari objek amount {value, currency}. */
     public static function nominal(array $body): ?int
     {
-        $amount = $body['amount'] ?? null;
-
-        if (is_array($amount) && isset($amount['value'])) {
-            return (int) round((float) $amount['value']);
+        foreach ([$body, $body['data'] ?? [], $body['result'] ?? []] as $sumber) {
+            if (! is_array($sumber)) {
+                continue;
+            }
+            foreach (['amount', 'grossAmount', 'gross_amount', 'paidAmount', 'totalAmount'] as $k) {
+                $amount = $sumber[$k] ?? null;
+                if (is_array($amount) && isset($amount['value']) && is_numeric($amount['value'])) {
+                    return (int) round((float) $amount['value']);
+                }
+                if (is_numeric($amount)) {
+                    return (int) round((float) $amount);
+                }
+            }
         }
 
-        return is_numeric($amount) ? (int) round((float) $amount) : null;
+        return null;
     }
 
-    /** referenceNo (dokumen tabel) atau referenceNumber (contoh respons inquiry). */
+    /** referenceNo (dokumen tabel) atau referenceNumber (contoh respons inquiry), juga di dalam "data". */
     public static function referenceNo(array $body): ?string
     {
-        return $body['referenceNo'] ?? $body['referenceNumber'] ?? null;
+        $d = static::datar($body);
+        $ref = $d['referenceno'] ?? $d['referencenumber'] ?? $d['reference_no'] ?? null;
+
+        return is_scalar($ref) && (string) $ref !== '' ? (string) $ref : null;
+    }
+
+    /** partnerReferenceNo / order_id yang dikembalikan AINO (bila ada). */
+    public static function partnerRef(array $body): ?string
+    {
+        $d = static::datar($body);
+        $ref = $d['partnerreferenceno'] ?? $d['partnerreferencenumber'] ?? $d['orderid'] ?? $d['order_id'] ?? null;
+
+        return is_scalar($ref) && (string) $ref !== '' ? (string) $ref : null;
     }
 
     private function http(): PendingRequest
@@ -154,6 +235,8 @@ class AinoClient
             'order_id' => $payload['transaction_details']['order_id'] ?? $payload['order_id'] ?? null,
             'responseCode' => $body['responseCode'] ?? null,
             'responseMessage' => $body['responseMessage'] ?? null,
+            // isi respons lengkap (tanpa string QR yang panjang) untuk diagnosis
+            'body' => is_array($body) ? array_diff_key($body, ['paymentContent' => 1]) : $response->body(),
         ]);
 
         if (! is_array($body) || $body === []) {

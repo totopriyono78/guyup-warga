@@ -43,6 +43,7 @@
                         <span class="relative flex size-2"><span class="absolute inline-flex size-full animate-ping rounded-full bg-brand-400 opacity-75"></span><span class="relative inline-flex size-2 rounded-full bg-brand-500"></span></span>
                         Menunggu pembayaran… halaman ini diperbarui otomatis.
                     </p>
+                    <button type="button" class="btn btn-secondary btn-sm mt-3" @click="cek()"><x-icon name="refresh" class="size-4" /> Saya sudah bayar, cek sekarang</button>
                 </div>
             </template>
 
@@ -61,7 +62,10 @@
                     <div class="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-slate-100 text-slate-500"><x-icon name="x" class="size-9" /></div>
                     <p class="text-xl font-bold text-slate-900" x-text="status === 'failed' ? 'Pembayaran gagal' : (status === 'canceled' ? 'Pembayaran dibatalkan' : 'QRIS kedaluwarsa')"></p>
                     <p class="mt-1 text-sm text-slate-500">Jika saldo sudah terpotong, tunggu beberapa menit — status akan diperbarui otomatis. Bila tidak, hubungi pengurus dengan menyebutkan kode transaksi di bawah.</p>
-                    <a href="{{ $kembali }}#donasi" class="btn btn-primary mt-6">Buat QRIS baru</a>
+                    <div class="mt-6 flex flex-wrap justify-center gap-2">
+                        <button type="button" class="btn btn-secondary" @click="cek()"><x-icon name="refresh" class="size-4" /> Cek ulang status</button>
+                        <a href="{{ $kembali }}#donasi" class="btn btn-primary">Buat QRIS baru</a>
+                    </div>
                 </div>
             </template>
 

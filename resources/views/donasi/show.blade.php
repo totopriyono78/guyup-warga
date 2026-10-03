@@ -94,11 +94,18 @@
                                 <p class="text-sm font-semibold text-slate-900">{{ rupiah($q->jumlah_iuran) }}</p>
                                 <span class="badge {{ ['paid' => 'badge-green', 'pending' => 'badge-amber'][$q->status] ?? 'badge-slate' }}">{{ $q->statusLabel() }}</span>
                             </div>
-                            @if ($bolehKelola && $q->isPending())
-                                <form method="post" action="{{ route('donasi.qris.cek', $q) }}">
-                                    @csrf
-                                    <button class="btn btn-ghost btn-sm px-2" title="Cek status ke AINO"><x-icon name="refresh" class="size-4" /></button>
-                                </form>
+                            @if ($bolehKelola && ! $q->isPaid())
+                                <div class="flex shrink-0 flex-col gap-1">
+                                    <form method="post" action="{{ route('donasi.qris.cek', $q) }}">
+                                        @csrf
+                                        <button class="btn btn-ghost btn-sm px-2" title="Cek status ke AINO"><x-icon name="refresh" class="size-4" /></button>
+                                    </form>
+                                    <form method="post" action="{{ route('donasi.qris.berhasil', $q) }}"
+                                          onsubmit="return confirm('Tandai transaksi ini BERHASIL? Lakukan hanya bila dana sudah dipastikan masuk di dashboard AINO / rekening.')">
+                                        @csrf
+                                        <button class="btn btn-ghost btn-sm px-2 text-emerald-700" title="Tandai berhasil (manual)"><x-icon name="check" class="size-4" /></button>
+                                    </form>
+                                </div>
                             @endif
                         </div>
                     @endforeach

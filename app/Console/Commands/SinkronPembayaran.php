@@ -16,7 +16,9 @@ class SinkronPembayaran extends Command
     public function handle(PembayaranService $service): int
     {
         $pending = Pembayaran::query()
-            ->where('status', 'pending')
+            // pending, plus yang sudah kedaluwarsa < 1 hari (bisa saja dilaporkan lunas terlambat)
+            ->where(fn ($q) => $q->where('status', 'pending')
+                ->orWhere(fn ($w) => $w->where('status', 'expired')->where('created_at', '>=', now()->subDay())))
             ->where('created_at', '>=', now()->subDays(max(1, (int) $this->option('hari'))))
             ->orderBy('id')
             ->get();
@@ -24,7 +26,7 @@ class SinkronPembayaran extends Command
         foreach ($pending as $p) {
             try {
                 $hasil = $service->sinkron($p);
-                if (! $hasil->isPending()) {
+                if ($hasil->status !== $p->status) {
                     $this->line("{$p->order_id}: {$hasil->status}");
                 }
             } catch (AinoException $e) {

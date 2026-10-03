@@ -24,6 +24,15 @@ class GaleriFoto extends Model
 
     public function url(): string
     {
+        // gambar contoh bawaan aplikasi ada di public/img, foto unggahan di storage publik
+        if (str_starts_with($this->path, 'img/')) {
+            return asset($this->path);
+        }
+        // data contoh versi lama (disalin ke storage/galeri/contoh): pakai salinan bawaan aplikasi
+        if (str_starts_with($this->path, 'galeri/contoh/') && is_file(public_path('img/galeri-contoh/'.basename($this->path)))) {
+            return asset('img/galeri-contoh/'.basename($this->path));
+        }
+
         return Storage::disk('public')->url($this->path);
     }
 }

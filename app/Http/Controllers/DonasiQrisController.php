@@ -60,7 +60,9 @@ class DonasiQrisController extends Controller
         abort_unless($pembayaran->isDonasi(), 404);
 
         // tanya AINO paling sering sekali per 10 detik per transaksi
-        if ($pembayaran->isPending() && Cache::add('cek-aino:'.$pembayaran->id, 1, 10)) {
+        // termasuk yang sudah ditandai kedaluwarsa: pembayaran bisa dilaporkan lunas terlambat (maks. 2 hari)
+        $bisaDicek = in_array($pembayaran->status, ['pending', 'expired'], true) && $pembayaran->created_at?->gt(now()->subDays(2));
+        if ($bisaDicek && Cache::add('cek-aino:'.$pembayaran->id, 1, 10)) {
             try {
                 $pembayaran = $this->service->sinkron($pembayaran);
             } catch (AinoException $e) {

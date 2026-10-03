@@ -23,4 +23,23 @@ class AinoClientTest extends TestCase
         $this->assertSame('R1', AinoClient::referenceNo(['referenceNumber' => 'R1']));
         $this->assertSame('R2', AinoClient::referenceNo(['referenceNo' => 'R2']));
     }
+
+    public function test_variasi_format_respons_inquiry(): void
+    {
+        $this->assertSame('paid', AinoClient::statusDariInquiry(['transactionStatusDesc' => 'Success']));
+        $this->assertSame('paid', AinoClient::statusDariInquiry(['transactionStatusDesc' => 'PAYMENT SUCCESS']));
+        $this->assertSame('paid', AinoClient::statusDariInquiry(['data' => ['transactionStatus' => 'PAID']]));
+        $this->assertSame('paid', AinoClient::statusDariInquiry(['statusCode' => 3, 'statusLabel' => 'Paid']));
+        $this->assertSame('paid', AinoClient::statusDariInquiry(['statusCode' => '3']));
+        $this->assertSame('expired', AinoClient::statusDariInquiry(['statusLabel' => 'Expired']));
+        $this->assertSame('pending', AinoClient::statusDariInquiry(['transactionStatusDesc' => 'Unpaid']));
+        // "status" umum (status panggilan API) tidak boleh dianggap lunas
+        $this->assertSame('pending', AinoClient::statusDariInquiry(['status' => 'success', 'data' => ['transactionStatus' => 'pending']]));
+        $this->assertSame('pending', AinoClient::statusDariInquiry(['status' => 'success']));
+
+        $this->assertSame(1, AinoClient::nominal(['amount' => ['value' => '1.00', 'currency' => 'IDR']]));
+        $this->assertSame(50000, AinoClient::nominal(['data' => ['grossAmount' => '50000']]));
+        $this->assertSame('R123', AinoClient::referenceNo(['data' => ['referenceNo' => 'R123']]));
+        $this->assertSame('abc', AinoClient::partnerRef(['partnerReferenceNumber' => 'abc']));
+    }
 }

@@ -153,7 +153,23 @@ class DonasiController extends Controller
             return back()->with('gagal', $e->getMessage());
         }
 
-        return back()->with('sukses', "Status transaksi: {$hasil->statusLabel()}.");
+        $r = (array) ($hasil->response_terakhir ?? []);
+        $info = collect(\App\Services\AinoClient::datar($r))
+            ->only(['responsecode', 'responsemessage', 'transactionstatusdesc', 'statuslabel', 'transactionstatus', 'statuscode', 'latesttransactionstatus'])
+            ->filter(fn ($v) => $v !== null && $v !== '')->map(fn ($v, $k) => "{$k}={$v}")->join(', ');
+
+        return back()->with($hasil->isPaid() ? 'sukses' : 'gagal', "Status transaksi: {$hasil->statusLabel()}.".($info ? " (AINO: {$info})" : ''));
+    }
+
+    /** Pengurus: tandai berhasil secara manual setelah memastikan dana masuk di dashboard AINO. */
+    public function tandaiQrisBerhasil(Pembayaran $pembayaran, PembayaranService $service)
+    {
+        abort_unless($pembayaran->donasi && $this->bolehKelola($pembayaran->donasi), 403);
+
+        $service->terapkan($pembayaran, 'paid', ['manual' => true, 'oleh' => $this->user()->id, 'waktu' => now()->toIso8601String()]);
+        \Illuminate\Support\Facades\Log::warning('Donasi QRIS ditandai berhasil secara manual', ['order_id' => $pembayaran->order_id, 'user_id' => $this->user()->id]);
+
+        return back()->with('sukses', 'Transaksi ditandai berhasil dan donatur sudah dicatat.');
     }
 
     private function bolehKelola(Donasi $d): bool

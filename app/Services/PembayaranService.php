@@ -230,20 +230,31 @@ class PembayaranService
      */
     public function sinkron(Pembayaran $pembayaran): Pembayaran
     {
-        if ($pembayaran->isPaid() || blank($pembayaran->reference_no)) {
+        if ($pembayaran->isPaid()) {
             return $pembayaran;
         }
 
-        $respons = $this->aino->inquiry($pembayaran->order_id, $pembayaran->reference_no);
+        // reference_no bisa kosong bila respons Generate memakai nama kolom lain: ambil ulang dari respons tersimpan
+        if (blank($pembayaran->reference_no) && is_array($pembayaran->response_generate)) {
+            $ref = AinoClient::referenceNo($pembayaran->response_generate);
+            if ($ref) {
+                $pembayaran->forceFill(['reference_no' => $ref])->save();
+            }
+        }
+
+        $respons = $this->aino->inquiry($pembayaran->order_id, (string) $pembayaran->reference_no);
 
         $status = AinoClient::statusDariInquiry($respons);
 
         // Pastikan nominal & order cocok sebelum menerima status lunas
         if ($status === 'paid') {
             $nominal = AinoClient::nominal($respons);
-            $partnerRef = $respons['partnerReferenceNo'] ?? $respons['partnerReferenceNumber'] ?? $pembayaran->order_id;
+            $partnerRef = AinoClient::partnerRef($respons);
+            // bandingkan tanpa beda huruf besar/kecil & tanda hubung (beberapa sistem menghapus "-" pada UUID)
+            $norm = fn (?string $s) => strtolower(str_replace('-', '', (string) $s));
+            $refCocok = $partnerRef === null || $norm($partnerRef) === $norm($pembayaran->order_id);
 
-            if (($nominal !== null && $nominal !== (int) $pembayaran->total) || $partnerRef !== $pembayaran->order_id) {
+            if (($nominal !== null && $nominal !== (int) $pembayaran->total) || ! $refCocok) {
                 Log::error('AINO: data pembayaran tidak cocok, status paid ditolak', [
                     'order_id' => $pembayaran->order_id,
                     'nominal_aino' => $nominal,

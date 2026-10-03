@@ -7,11 +7,10 @@ use App\Models\Rt;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Contoh album galeri kegiatan. Gambarnya ilustrasi (bukan foto asli) dari
- * database/seeders/contoh/galeri, disalin ke storage publik. Aman dijalankan berulang kali.
+ * public/img/galeri-contoh. Aman dijalankan berulang kali.
  * Ganti/hapus album contoh lewat menu Galeri Kegiatan setelah punya foto asli.
  */
 class GaleriContohSeeder extends Seeder
@@ -77,13 +76,13 @@ class GaleriContohSeeder extends Seeder
             }
 
             foreach ($a['ket'] as $i => $ket) {
-                $sumber = database_path("seeders/contoh/galeri/{$slug}-".($i + 1).'.jpg');
-                if (! is_file($sumber)) {
+                // Gambar contoh ikut dalam aplikasi (public/img/galeri-contoh), tidak disalin ke storage,
+                // sehingga tetap tampil di hosting yang storage-nya terpisah (mis. volume Railway).
+                $path = "img/galeri-contoh/{$slug}-".($i + 1).'.jpg';
+                if (! is_file(public_path($path))) {
                     continue;
                 }
-                $tujuan = "galeri/contoh/{$slug}-".($i + 1).'.jpg';
-                Storage::disk('public')->put($tujuan, file_get_contents($sumber));
-                $g->fotos()->create(['path' => $tujuan, 'keterangan' => $ket, 'urutan' => $i + 1]);
+                $g->fotos()->create(['path' => $path, 'keterangan' => $ket, 'urutan' => $i + 1]);
             }
         }
     }

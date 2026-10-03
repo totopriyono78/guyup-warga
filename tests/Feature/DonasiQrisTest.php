@@ -165,4 +165,44 @@ class DonasiQrisTest extends TestCase
         $this->get(route('publik.donasi.bayar', $p))->assertNotFound();
         $this->getJson(route('publik.donasi.status', $p))->assertNotFound();
     }
+
+    public function test_respons_aino_tanpa_tanda_hubung_dan_status_teks_lain_tetap_lunas(): void
+    {
+        Http::fake([
+            'aino.test/payment/v1/request' => function (Request $r) {
+                $this->orderId = $r['transaction_details']['order_id'];
+
+                return Http::response(['responseCode' => '2004700', 'paymentContent' => '000201',
+                    'data' => ['referenceNo' => 'REFX'], 'expiryDate' => now()->addMinutes(15)->toIso8601String()]);
+            },
+            // inquiry: kode 2005100, status "Payment Success", order id tanpa tanda hubung, nominal string desimal
+            'aino.test/payment/v1/inquiry' => fn (Request $r) => Http::response([
+                'responseCode' => '2005100', 'responseMessage' => 'Successful',
+                'data' => ['partnerReferenceNo' => strtoupper(str_replace('-', '', $r['order_id'])), 'transactionStatus' => 'Payment Success',
+                    'amount' => ['value' => '25000.00', 'currency' => 'IDR']],
+            ]),
+        ]);
+        $d = $this->donasi();
+
+        $this->post(route('publik.donasi.qris', $d), ['nominal' => '25000', 'nama' => 'Bu Ani'])->assertRedirect();
+        $p = Pembayaran::query()->firstOrFail();
+        $this->assertSame('REFX', $p->reference_no);
+
+        $this->getJson(route('publik.donasi.status', $p))->assertJson(['status' => 'paid']);
+        $this->assertSame('Bu Ani', DonasiDonatur::query()->firstOrFail()->nama);
+    }
+
+    public function test_pengurus_bisa_menandai_berhasil_manual(): void
+    {
+        $d = $this->donasi();
+        $p = Pembayaran::query()->create(['donasi_id' => $d->id, 'donatur_nama' => 'Pak Dedi', 'order_id' => (string) \Illuminate\Support\Str::uuid(),
+            'jumlah_iuran' => 40000, 'total' => 40000, 'status' => 'expired']);
+
+        $warga = User::factory()->warga($this->buatKeluarga()->id)->create();
+        $this->actingAs($warga)->post(route('donasi.qris.berhasil', $p))->assertForbidden();
+
+        $this->actingAs($this->admin())->post(route('donasi.qris.berhasil', $p))->assertSessionHas('sukses');
+        $this->assertTrue($p->fresh()->isPaid());
+        $this->assertSame(40000, DonasiDonatur::query()->where('pembayaran_id', $p->id)->value('nominal'));
+    }
 }
