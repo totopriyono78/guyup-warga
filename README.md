@@ -79,6 +79,36 @@ Lalu:
 
 > Sebelum HTTPS aktif, set `SESSION_SECURE_COOKIE=false` sementara — kalau tidak, login akan selalu kembali ke halaman masuk.
 
+### Deploy ke Railway
+
+Railway (Railpack) membaca versi PHP dari `composer.json` (`"php": "^8.4"`), memasang ekstensi `gd` & `pdo_pgsql`,
+menjalankan `npm run build`, `php artisan migrate --force`, dan seeder admin secara otomatis.
+
+1. Tambahkan layanan **PostgreSQL** di proyek Railway.
+2. Di layanan aplikasi, isi **Variables**:
+
+   ```
+   APP_NAME=Rukoon
+   APP_ENV=production
+   APP_DEBUG=false
+   APP_KEY=base64:...            # hasil: php artisan key:generate --show
+   APP_URL=https://<nama>.up.railway.app
+   DB_CONNECTION=pgsql
+   DB_URL=${{Postgres.DATABASE_URL}}
+   TRUSTED_PROXIES=*             # wajib: HTTPS diakhiri di proxy Railway
+   SESSION_SECURE_COOKIE=true
+   LOG_CHANNEL=stderr            # log tampil di tab Logs Railway
+   ADMIN_EMAIL=admin@domain.id
+   ADMIN_PASSWORD=...
+   AINO_MERCHANT_CODE=...
+   AINO_SECRET_KEY=...
+   AINO_CALLBACK_URL=https://<nama>.up.railway.app/aino/notify
+   ```
+3. **Volume** untuk foto: buat Volume dan pasang (mount) di `/app/storage/app/public`.
+   Tanpa volume, foto yang diunggah hilang setiap kali deploy ulang. Tautan `public/storage` dibuat otomatis.
+4. **Penjadwal** (tagihan bulanan & cek status QRIS): buat layanan kedua dari repo yang sama dengan
+   *Custom Start Command* `php artisan schedule:work` dan variabel yang sama (bisa memakai *Shared Variables*).
+
 ### Mencoba dengan data contoh (opsional, jangan di server produksi)
 
 ```bash

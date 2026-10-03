@@ -29,7 +29,10 @@ return [
 
     // IP reverse proxy yang dipercaya (pisahkan koma). Default hanya localhost.
     // Isi bila memakai load balancer / Cloudflare, mis. "10.0.0.0/8,173.245.48.0/20"
-    'trusted_proxies' => array_values(array_filter(array_map('trim', explode(',', (string) env('TRUSTED_PROXIES', '127.0.0.1,::1'))))),
+    // "*" = percayai semua proxy (wajib di Railway/Render/Fly karena HTTPS diakhiri di load balancer mereka)
+    'trusted_proxies' => trim((string) env('TRUSTED_PROXIES', '127.0.0.1,::1')) === '*'
+        ? '*'
+        : array_values(array_filter(array_map('trim', explode(',', (string) env('TRUSTED_PROXIES', '127.0.0.1,::1'))))),
 
     // Peta wilayah (Leaflet)
     'peta' => [
