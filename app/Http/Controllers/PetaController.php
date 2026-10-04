@@ -19,7 +19,7 @@ class PetaController extends Controller
         $rumahs = [];
         foreach ($rts as $rt) {
             foreach ($rt->bloks as $blok) {
-                $bloks[] = ['id' => $blok->id, 'label' => 'Blok '.$blok->nama.' · RT '.$rt->nomor, 'warna' => $rt->warna];
+                $bloks[] = ['id' => $blok->id, 'label' => 'Blok '.$blok->nama.' · RT '.$rt->nomor, 'warna' => $rt->warna, 'rt' => $rt->nomor];
                 foreach ($blok->rumahs as $rumah) {
                     $rumah->setRelation('blok', $blok->setRelation('rt', $rt));
                     $rumahs[] = self::dataRumah($rumah);
@@ -32,6 +32,7 @@ class PetaController extends Controller
         return view('wilayah.peta', [
             'rumahs' => $rumahs,
             'bloks' => $bloks,
+            'rts' => $rts->sortBy('nomor')->map(fn ($rt) => ['nomor' => $rt->nomor, 'warna' => $rt->warna])->values()->all(),
             'peta' => Pengaturan::petaJs(),
             'statusList' => Rumah::STATUS,
         ]);

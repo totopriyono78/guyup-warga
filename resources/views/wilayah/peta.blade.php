@@ -11,6 +11,7 @@
     <div x-data="editorPeta(@js([
             'rumahs' => $rumahs,
             'bloks' => $bloks,
+            'rts' => $rts,
             'peta' => $peta,
             'admin' => auth()->user()->isAdmin(),
             'url' => [
@@ -39,6 +40,24 @@
                             <p class="flex-1 text-slate-600">Pilih rumah di daftar lalu klik atapnya di peta, <b>atau</b> klik langsung di peta untuk membuat rumah baru.</p>
                         </template>
                     </div>
+                    <template x-if="o.rts.length > 1">
+                        <div class="flex items-center gap-1.5 overflow-x-auto border-b border-slate-100 px-3 py-2 text-sm">
+                            <span class="shrink-0 text-xs font-medium text-slate-500">Tampilkan:</span>
+                            <button type="button" class="shrink-0 rounded-full px-3 py-1 font-medium ring-1 transition"
+                                    :class="filterRt === '' ? 'bg-brand-700 text-white ring-brand-700' : 'bg-white text-slate-700 ring-slate-300 hover:bg-slate-50'"
+                                    @click="pilihRt('')">Semua RT</button>
+                            <template x-for="rt in o.rts" :key="rt.nomor">
+                                <button type="button" class="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 font-medium ring-1 transition"
+                                        :class="filterRt === rt.nomor ? 'text-white' : 'bg-white text-slate-700 ring-slate-300 hover:bg-slate-50'"
+                                        :style="filterRt === rt.nomor ? `background:${rt.warna};--tw-ring-color:${rt.warna}` : ''"
+                                        @click="pilihRt(rt.nomor)">
+                                    <span class="size-2 rounded-full" :class="filterRt === rt.nomor ? 'bg-white' : ''" :style="filterRt === rt.nomor ? '' : `background:${rt.warna}`"></span>
+                                    <span x-text="'RT ' + rt.nomor"></span>
+                                    <span class="text-xs opacity-75" x-text="jumlahRt(rt.nomor)"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </template>
                     <div class="relative">
                         <div x-ref="peta" class="h-[72vh] min-h-[440px] w-full"></div>
                         <div x-cloak x-show="menyeret" class="pointer-events-none absolute inset-0 z-[500] rounded-b-2xl ring-4 ring-inset transition"
@@ -117,7 +136,7 @@
                     <div class="space-y-2 border-b border-slate-100 p-3">
                         <div class="flex items-center justify-between">
                             <h2 class="card-title">Rumah</h2>
-                            <span class="text-xs text-slate-500"><span x-text="jumlahBertitik()"></span>/<span x-text="rumahs.length"></span> sudah ada titik</span>
+                            <span class="text-xs text-slate-500"><span x-text="jumlahBertitik()"></span>/<span x-text="rumahs.filter(r => rtTampil(r)).length"></span> sudah ada titik<span x-show="filterRt" x-text="' · RT ' + filterRt"></span></span>
                         </div>
                         <input x-model="filter" type="search" placeholder="Cari kode (A-12) atau nama…" class="input">
                         <label class="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" x-model="hanyaBelum" class="rounded border-slate-300 text-brand-700"> Hanya yang belum ada titik</label>
@@ -196,7 +215,7 @@
 
                 return {
                     o, rumahs: o.rumahs, map: null, marker: {}, kandidat: null, jumlahKandidat: 0,
-                    dipilih: null, filter: '', hanyaBelum: false, q: '', hasilCari: [], mencari: false, mengimpor: false,
+                    dipilih: null, filter: '', hanyaBelum: false, filterRt: '', q: '', hasilCari: [], mencari: false, mengimpor: false,
                     baru: null, formBaru: { blok_id: null, nomor: '', status_hunian: 'dihuni' }, galatBaru: '', menyimpan: false,
                     pesan: '', pesanGagal: false,
                     menyeret: false, diAtasPeta: false, seretId: null, seretKode: '',
@@ -206,11 +225,11 @@
                         window.addEventListener('touchmove', e => { if (S?.aktif) e.preventDefault() }, { passive: false });
                         this.map = await SiwargaPeta.buat(this.$refs.peta, o.peta);
                         this.kandidat = L.layerGroup().addTo(this.map);
-                        const titik = [];
-                        for (const r of this.rumahs) {
-                            if (r.lat !== null) { this.pasangMarker(r); titik.push([r.lat, r.lng]); }
-                        }
-                        if (titik.length) this.map.fitBounds(titik, { padding: [30, 30], maxZoom: 19 });
+                        try { const rt = localStorage.getItem('rukoon.peta.rt'); if (rt && o.rts.some(x => x.nomor === rt)) this.filterRt = rt; } catch (e) {}
+                        const m0 = location.hash.match(/^#rumah-(\d+)$/);
+                        const target = m0 && this.rumahs.find(r => r.id === +m0[1]);
+                        if (target && !this.rtTampil(target)) this.filterRt = '';
+                        this.tampilkanTitik(true);
                         this.map.on('click', e => this.klikPeta(e.latlng));
                         const m = location.hash.match(/^#rumah-(\d+)$/);
                         if (m && this.rumahs.some(r => r.id === +m[1])) {
@@ -221,14 +240,38 @@
                         }
                     },
 
+                    // ---------- filter RT ----------
+                    rtTampil(r) { return this.filterRt === '' || r.rt === this.filterRt },
+                    jumlahRt(nomor) { return this.rumahs.filter(r => r.rt === nomor && r.lat !== null).length },
+                    pilihRt(nomor) {
+                        this.filterRt = nomor;
+                        try { localStorage.setItem('rukoon.peta.rt', nomor) } catch (e) {}
+                        const d = this.rumahDipilih();
+                        if (d && !this.rtTampil(d)) this.dipilih = null;
+                        // rumah baru dari klik peta otomatis memakai blok di RT terpilih
+                        const blok = o.bloks.find(b => b.rt === nomor);
+                        if (blok && !o.bloks.some(b => b.id === this.formBaru.blok_id && b.rt === nomor)) this.formBaru.blok_id = blok.id;
+                        this.tampilkanTitik(true);
+                    },
+                    tampilkanTitik(paskan = false) {
+                        const titik = [];
+                        for (const r of this.rumahs) {
+                            if (r.lat === null) continue;
+                            this.pasangMarker(r);
+                            if (this.rtTampil(r)) titik.push([r.lat, r.lng]);
+                        }
+                        if (paskan && titik.length) this.map.fitBounds(titik, { padding: [30, 30], maxZoom: 19 });
+                    },
+
                     // ---------- daftar ----------
                     daftar() {
                         const q = this.filter.trim().toLowerCase();
                         return this.rumahs.filter(r =>
+                            this.rtTampil(r) &&
                             (!this.hanyaBelum || r.lat === null) &&
                             (!q || r.kode.toLowerCase().includes(q) || (r.kk || '').toLowerCase().includes(q)));
                     },
-                    jumlahBertitik() { return this.rumahs.filter(r => r.lat !== null).length },
+                    jumlahBertitik() { return this.rumahs.filter(r => r.lat !== null && this.rtTampil(r)).length },
                     rumahDipilih() { return this.rumahs.find(r => r.id === this.dipilih) },
                     pilih(id) {
                         this.dipilih = this.dipilih === id ? null : id;
@@ -332,7 +375,8 @@
 
                     // ---------- marker ----------
                     pasangMarker(r) {
-                        if (this.marker[r.id]) this.map.removeLayer(this.marker[r.id]);
+                        if (this.marker[r.id]) { this.map.removeLayer(this.marker[r.id]); delete this.marker[r.id]; }
+                        if (!this.rtTampil(r)) return;
                         const kat = r.kk ? (r.status === 'kontrakan' ? 'kontrakan' : 'terisi') : (r.status === 'kosong' ? 'kosong' : (r.status === 'usaha' ? 'usaha' : 'belum_didata'));
                         const mk = L.marker([r.lat, r.lng], {
                             draggable: true,
@@ -357,7 +401,7 @@
                         }
                         this.baru = latlng;
                         this.galatBaru = '';
-                        this.formBaru.blok_id = this.formBaru.blok_id || (o.bloks[0] && o.bloks[0].id);
+                        this.formBaru.blok_id = this.formBaru.blok_id || ((o.bloks.find(b => this.filterRt === '' || b.rt === this.filterRt) || o.bloks[0] || {}).id);
                         this.formBaru.nomor = nomorSaran;
                         if (!nomorSaran) this.saranNomor();
                         this.$nextTick(() => this.$refs.nomorBaru && this.$refs.nomorBaru.focus());
