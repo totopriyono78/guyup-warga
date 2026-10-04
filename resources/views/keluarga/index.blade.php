@@ -56,7 +56,8 @@
     @else
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             @foreach ($keluarga as $kk)
-                <a href="{{ route('keluarga.show', $kk) }}" class="card group flex gap-3 p-3 transition sm:gap-4 sm:p-4 hover:border-brand-300 hover:shadow">
+                <div class="card group relative flex gap-3 p-3 transition sm:gap-4 sm:p-4 hover:border-brand-300 hover:shadow">
+                    <a href="{{ route('keluarga.show', $kk) }}" class="absolute inset-0 z-0 rounded-[inherit]" aria-label="Lihat keluarga {{ $kk->nama_kepala }}"></a>
                     <x-avatar :src="$kk->fotoUrl()" :nama="$kk->nama_kepala" size="size-16 sm:size-20" rounded="rounded-xl" />
                     <div class="min-w-0 flex-1">
                         <p class="truncate font-semibold text-slate-900 group-hover:text-brand-800">{{ $kk->nama_kepala }}</p>
@@ -68,7 +69,16 @@
                             @unless ($kk->no_kk) <span class="badge badge-amber">No. KK kosong</span> @endunless
                         </div>
                     </div>
-                </a>
+                    @if ($kk->rumah?->punyaLokasi())
+                        <a href="{{ route('denah', ['tampilan' => 'peta']) }}#rumah-{{ $kk->rumah->id }}"
+                           class="relative z-10 -mr-1 -mt-1 inline-flex size-9 shrink-0 items-center justify-center self-start rounded-lg text-brand-700 hover:bg-brand-50"
+                           title="Lihat lokasi rumah di peta" aria-label="Lihat lokasi rumah {{ $kk->nama_kepala }} di peta"><x-icon name="pin" class="size-5" /></a>
+                    @elseif ($kk->rumah && auth()->user()->canManageRt($kk->rumah->blok->rt_id))
+                        <a href="{{ route('peta.edit') }}#rumah-{{ $kk->rumah->id }}"
+                           class="relative z-10 -mr-1 -mt-1 inline-flex size-9 shrink-0 items-center justify-center self-start rounded-lg text-slate-300 hover:bg-amber-50 hover:text-amber-600"
+                           title="Rumah belum ditandai di peta — klik untuk menandai" aria-label="Tandai rumah {{ $kk->nama_kepala }} di peta"><x-icon name="pin" class="size-5" /></a>
+                    @endif
+                </div>
             @endforeach
         </div>
         <div class="mt-5">{{ $keluarga->links() }}</div>

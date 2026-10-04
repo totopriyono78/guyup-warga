@@ -1,6 +1,30 @@
 @extends('layouts.app')
 @section('title', 'Keluarga '.$kk->nama_kepala)
 
+@if ($kk->rumah?->punyaLokasi())
+    @push('head')
+        <link rel="stylesheet" href="{{ asset('vendor/leaflet/leaflet.css') }}">
+        <script src="{{ asset('vendor/leaflet/leaflet.js') }}"></script>
+        <script src="{{ asset('js/peta.js') }}?v={{ @filemtime(public_path('js/peta.js')) }}"></script>
+    @endpush
+    @push('scripts')
+        <script>
+            document.addEventListener('DOMContentLoaded', async () => {
+                const el = document.getElementById('peta-rumah');
+                if (!el || !window.SiwargaPeta) return;
+                const map = await SiwargaPeta.buat(el, @js(\App\Models\Pengaturan::petaJs()));
+                // pratinjau saja: klik membuka peta wilayah
+                ['dragging', 'scrollWheelZoom', 'doubleClickZoom', 'touchZoom', 'boxZoom', 'keyboard'].forEach(h => map[h]?.disable());
+                map.zoomControl?.remove();
+                document.querySelectorAll('#peta-rumah .leaflet-control-layers').forEach(c => c.remove());
+                const d = el.dataset;
+                L.marker([+d.lat, +d.lng], { icon: SiwargaPeta.ikon('terisi', d.kode, { warnaRt: d.warna, dipilih: true }), interactive: false }).addTo(map);
+                map.setView([+d.lat, +d.lng], 19);
+            });
+        </script>
+    @endpush
+@endif
+
 @section('content')
     @php $u = auth()->user(); $lihatSensitif = $bolehKelola || (int) $u->kartu_keluarga_id === (int) $kk->id; @endphp
 
@@ -30,7 +54,11 @@
                         <div><dt class="text-xs text-slate-500">Status tinggal</dt><dd class="font-medium">{{ \App\Models\KartuKeluarga::STATUS_TINGGAL[$kk->status_tinggal] ?? $kk->status_tinggal }}</dd></div>
                         <div><dt class="text-xs text-slate-500">Nomor KK</dt><dd class="font-mono">{{ $lihatSensitif ? ($kk->no_kk ?: '—') : '••••' }}</dd></div>
                         <div><dt class="text-xs text-slate-500">No. HP</dt><dd>@if ($kk->no_hp) <a href="tel:{{ $kk->no_hp }}" class="text-brand-700">{{ $kk->no_hp }}</a> @else — @endif</dd></div>
-                        <div><dt class="text-xs text-slate-500">Alamat</dt><dd>{{ $kk->rumah?->alamat ?? '—' }}</dd></div>
+                        <div><dt class="text-xs text-slate-500">Alamat</dt><dd>{{ $kk->rumah?->alamat ?? '—' }}
+                            @if ($kk->rumah?->punyaLokasi())
+                                <a href="{{ route('denah', ['tampilan' => 'peta']) }}#rumah-{{ $kk->rumah->id }}" class="mt-0.5 flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline"><x-icon name="pin" class="size-3.5" /> Lihat di peta</a>
+                            @endif
+                        </dd></div>
                         <div><dt class="text-xs text-slate-500">Tinggal sejak</dt><dd>{{ $kk->tanggal_masuk?->translatedFormat('F Y') ?? '—' }}</dd></div>
                         <div><dt class="text-xs text-slate-500">Jumlah anggota</dt><dd>{{ $kk->anggota->count() }} orang</dd></div>
                         <div><dt class="text-xs text-slate-500">Status</dt><dd>@if ($kk->aktif) <span class="badge badge-green">Aktif</span> @else <span class="badge badge-slate">Sudah pindah</span> @endif</dd></div>
@@ -99,6 +127,36 @@
         </div>
 
         <div class="space-y-6">
+            {{-- Lokasi rumah di peta --}}
+            @if ($kk->rumah)
+                @php
+                    $rumah = $kk->rumah;
+                    $urlPeta = route('denah', ['tampilan' => 'peta']).'#rumah-'.$rumah->id;
+                    $urlAtur = $u->canManageRt($rumah->blok->rt_id) ? route('peta.edit').'#rumah-'.$rumah->id : null;
+                @endphp
+                <div class="card overflow-hidden">
+                    <div class="flex items-center justify-between gap-2 px-5 py-3.5">
+                        <h2 class="card-title flex items-center gap-1.5"><x-icon name="pin" class="size-4 text-brand-700" /> Lokasi rumah</h2>
+                        <span class="badge {{ $rumah->punyaLokasi() ? 'badge-green' : 'badge-slate' }}">{{ $rumah->punyaLokasi() ? 'Sudah ditandai' : 'Belum ditandai' }}</span>
+                    </div>
+                    @if ($rumah->punyaLokasi())
+                        <a href="{{ $urlPeta }}" class="block border-y border-slate-100" title="Buka di peta wilayah">
+                            <div id="peta-rumah" class="h-48 w-full bg-slate-100" data-lat="{{ $rumah->lat }}" data-lng="{{ $rumah->lng }}"
+                                 data-kode="{{ $rumah->blok->nama }}-{{ $rumah->nomor }}" data-warna="{{ $rumah->blok->rt->warna }}"></div>
+                        </a>
+                    @else
+                        <p class="border-t border-slate-100 bg-amber-50 px-5 py-3 text-xs text-amber-900">Rumah {{ $rumah->alamat }} belum ditandai di peta.</p>
+                    @endif
+                    <div class="grid gap-2 p-3 {{ $rumah->punyaLokasi() && $urlAtur ? 'grid-cols-2' : 'grid-cols-1' }}">
+                        @if ($rumah->punyaLokasi())
+                            <a href="{{ $urlPeta }}" class="btn btn-secondary btn-sm"><x-icon name="map" class="size-4" /> Lihat di peta</a>
+                        @endif
+                        @if ($urlAtur)
+                            <a href="{{ $urlAtur }}" class="btn btn-sm {{ $rumah->punyaLokasi() ? 'btn-ghost' : 'btn-primary' }}"><x-icon name="pencil" class="size-4" /> {{ $rumah->punyaLokasi() ? 'Perbaiki titik' : 'Tandai di peta' }}</a>
+                        @endif
+                    </div>
+                </div>
+            @endif
             <div class="card">
                 <div class="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
                     <h2 class="card-title">Iuran</h2>
