@@ -19,4 +19,22 @@
             <a href="{{ $kembali ?? route('keluarga.show', $kk) }}" class="btn btn-ghost">Batal</a>
         </div>
     </form>
+
+    @if ($anggota->exists)
+        @php $kepalaTerkunci = $anggota->hubungan === 'Kepala Keluarga' && $kk->anggota()->count() > 1; @endphp
+        <div class="card card-body mt-5 max-w-3xl border-rose-200">
+            <h2 class="font-semibold text-rose-700">Hapus anggota keluarga</h2>
+            @if ($kepalaTerkunci)
+                <p class="mt-1 text-sm text-slate-600">{{ $anggota->nama }} adalah kepala keluarga dan masih ada anggota lain. Jadikan anggota lain sebagai kepala keluarga terlebih dahulu, baru data ini bisa dihapus.</p>
+            @else
+                <p class="mt-1 text-sm text-slate-600">Gunakan bila anggota ini salah ditambahkan atau sudah tidak termasuk keluarga ini. Data dan fotonya akan dihapus permanen.</p>
+                <form method="post" action="{{ route('anggota.destroy', $anggota) }}" class="mt-3"
+                      onsubmit="return confirm(@js('Hapus '.$anggota->nama.' dari keluarga ini? Data yang dihapus tidak bisa dikembalikan.'))">
+                    @csrf @method('delete')
+                    @if (! empty($kembali)) <input type="hidden" name="kembali" value="{{ $kembali }}"> @endif
+                    <button class="btn border border-rose-300 bg-white text-rose-700 hover:bg-rose-50"><x-icon name="trash" class="size-4" /> Hapus {{ $anggota->nama }}</button>
+                </form>
+            @endif
+        </div>
+    @endif
 @endsection

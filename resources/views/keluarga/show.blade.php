@@ -63,7 +63,17 @@
                                         <p class="text-xs text-slate-500">{{ $a->hubungan }} · {{ $a->jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan' }}@if ($a->umur !== null) · {{ $a->umur }} th @endif</p>
                                     </div>
                                     @if ($bolehKelola)
-                                        <a href="{{ route('anggota.edit', $a) }}" class="btn btn-ghost btn-sm -mr-2 -mt-1" title="Ubah"><x-icon name="pencil" class="size-4" /></a>
+                                        <div class="-mr-2 -mt-1 flex shrink-0">
+                                            <a href="{{ route('anggota.edit', $a) }}" class="btn btn-ghost btn-sm" title="Ubah"><x-icon name="pencil" class="size-4" /></a>
+                                            @if ($a->hubungan === 'Kepala Keluarga' && $kk->anggota->count() > 1)
+                                                <span class="btn btn-ghost btn-sm cursor-not-allowed text-slate-300" title="Kepala keluarga tidak bisa dihapus selama masih ada anggota lain. Ubah dulu kepala keluarganya."><x-icon name="trash" class="size-4" /></span>
+                                            @else
+                                                <form method="post" action="{{ route('anggota.destroy', $a) }}" onsubmit="return confirm(@js('Hapus '.$a->nama.' dari keluarga ini? Data yang dihapus tidak bisa dikembalikan.'))">
+                                                    @csrf @method('delete')
+                                                    <button class="btn btn-ghost btn-sm text-rose-600 hover:bg-rose-50" title="Hapus anggota"><x-icon name="trash" class="size-4" /></button>
+                                                </form>
+                                            @endif
+                                        </div>
                                     @endif
                                 </div>
                                 <dl class="mt-2 space-y-0.5 text-xs text-slate-600">
