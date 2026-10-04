@@ -54,8 +54,11 @@ class DenahController extends Controller
                 $adaLokasi = $adaLokasi || ($rumah->punyaLokasi() && ! $sembunyikanDariPeta);
 
                 $detail[$rumah->id] = [
+                    'id' => $rumah->id,
                     'kode' => $blok->nama.'-'.$rumah->nomor,
                     'kelola' => $kelola,
+                    'urlPeta' => route('denah', array_filter(['tampilan' => 'peta', 'rt' => $rtId, 'mode' => $mode === 'iuran' ? 'iuran' : null])).'#rumah-'.$rumah->id,
+                    'urlAturTitik' => $kelola ? route('peta.edit').'#rumah-'.$rumah->id : null,
                     'alamat' => 'Blok '.$blok->nama.' No. '.$rumah->nomor.' · RT '.$blok->rt->nomor,
                     'status' => Rumah::STATUS[$rumah->status_hunian] ?? $rumah->status_hunian,
                     'kat' => $this->kategori($rumah, $mode, $kelola),

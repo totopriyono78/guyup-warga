@@ -290,6 +290,32 @@
                                 </div>
                             </template>
 
+                            {{-- Lokasi rumah di peta --}}
+                            <template x-if="aktif.lat !== null || aktif.urlAturTitik">
+                                <div class="overflow-hidden rounded-xl border border-slate-200">
+                                    <div class="flex items-center justify-between gap-2 px-4 py-2.5">
+                                        <p class="flex items-center gap-1.5 text-sm font-semibold text-slate-800"><x-icon name="pin" class="size-4 text-brand-700" /> Lokasi di peta</p>
+                                        <span class="badge" :class="aktif.lat !== null ? 'badge-green' : 'badge-slate'" x-text="aktif.lat !== null ? 'Sudah ditandai' : 'Belum ditandai'"></span>
+                                    </div>
+                                    <template x-if="aktif.lat !== null && tampilan !== 'peta'">
+                                        <div id="peta-mini" class="h-52 w-full border-y border-slate-100 bg-slate-100"></div>
+                                    </template>
+                                    <template x-if="aktif.lat === null">
+                                        <p class="border-t border-slate-100 bg-amber-50 px-4 py-3 text-xs text-amber-900">Rumah ini belum punya titik di peta.</p>
+                                    </template>
+                                    <div class="grid gap-2 p-3" :class="aktif.lat !== null && aktif.urlAturTitik && tampilan !== 'peta' ? 'grid-cols-2' : 'grid-cols-1'">
+                                        <template x-if="aktif.lat !== null && tampilan !== 'peta'">
+                                            <a :href="aktif.urlPeta" class="btn btn-secondary btn-sm"><x-icon name="map" class="size-4" /> Buka di peta</a>
+                                        </template>
+                                        <template x-if="aktif.urlAturTitik">
+                                            <a :href="aktif.urlAturTitik" class="btn btn-sm" :class="aktif.lat !== null ? 'btn-ghost' : 'btn-primary'">
+                                                <x-icon name="pencil" class="size-4" /> <span x-text="aktif.lat !== null ? 'Perbaiki titik' : 'Tandai di peta'"></span>
+                                            </a>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
                             <div class="flex gap-2" x-show="aktif.edit || aktif.tambahKk">
                                 <template x-if="aktif.tambahKk"><a :href="aktif.tambahKk" class="btn btn-primary btn-sm flex-1"><x-icon name="plus" class="size-4" /> Tambah KK</a></template>
                                 <template x-if="aktif.edit"><a :href="aktif.edit" class="btn btn-secondary btn-sm flex-1"><x-icon name="pencil" class="size-4" /> Ubah rumah</a></template>
@@ -312,9 +338,10 @@
                 // status seret disimpan di luar state Alpine (berisi elemen DOM, tidak perlu reaktif)
                 let S = null;
                 let barusSeret = false;
+                let mini = null, nomorMini = 0;
 
                 return {
-                    data, aktif: null, zoom: null, sorot: '', map: null, marker: {},
+                    data, tampilan, aktif: null, zoom: null, sorot: '', map: null, marker: {},
                     tanya: null, pesan: null, sibuk: false,
                     init() {
                         if (urlPindah) {
@@ -357,7 +384,27 @@
                         const pertama = Object.keys(this.marker).find(id => this.cocok(+id));
                         if (pertama && this.map) this.map.panTo(this.marker[pertama].getLatLng());
                     },
-                    buka(id) { this.aktif = this.data[id] || null },
+                    buka(id) {
+                        this.aktif = this.data[id] || null;
+                        if (this.aktif && this.aktif.lat !== null && tampilan !== 'peta') this.$nextTick(() => this.petaMini(id));
+                    },
+                    // Peta kecil di panel detail: posisi rumah ini beserta rumah di sekitarnya
+                    async petaMini(id) {
+                        const token = ++nomorMini;
+                        if (mini) { mini.remove(); mini = null; }
+                        const el = document.getElementById('peta-mini');
+                        const r = this.data[id];
+                        if (!el || !r || r.lat === null) return;
+                        const m = await SiwargaPeta.buat(el, peta);
+                        if (token !== nomorMini || !el.isConnected) { m.remove(); return; }
+                        mini = m;
+                        for (const [rid, x] of Object.entries(this.data)) {
+                            if (x.lat === null || +rid === +id) continue;
+                            L.marker([x.lat, x.lng], { icon: SiwargaPeta.ikon(x.kat, x.kode, { warnaRt: x.warnaRt }), opacity: .55, interactive: false }).addTo(m);
+                        }
+                        L.marker([r.lat, r.lng], { icon: SiwargaPeta.ikon(r.kat, r.kode, { warnaRt: r.warnaRt, dipilih: true }), zIndexOffset: 1000, interactive: false }).addTo(m);
+                        m.setView([r.lat, r.lng], 19);
+                    },
                     klikRumah(id) { if (!barusSeret) this.buka(id) },
 
                     // ---------- Seret & lepas rumah (mode pindah) ----------
@@ -490,7 +537,7 @@
                         clearTimeout(this._t);
                         this._t = setTimeout(() => this.pesan = null, ok ? 3500 : 6000);
                     },
-                    tutup() { this.aktif = null; this.zoom = null },
+                    tutup() { this.aktif = null; this.zoom = null; nomorMini++; if (mini) { mini.remove(); mini = null; } },
                     inisial(n) { return (n || '?').split(/\s+/).slice(0, 2).map(k => k[0]).join('').toUpperCase() },
                     cocok(id) {
                         const q = this.sorot.trim().toLowerCase();

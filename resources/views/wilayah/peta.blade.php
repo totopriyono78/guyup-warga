@@ -213,7 +213,12 @@
                         if (titik.length) this.map.fitBounds(titik, { padding: [30, 30], maxZoom: 19 });
                         this.map.on('click', e => this.klikPeta(e.latlng));
                         const m = location.hash.match(/^#rumah-(\d+)$/);
-                        if (m && this.rumahs.some(r => r.id === +m[1])) this.pilih(+m[1]);
+                        if (m && this.rumahs.some(r => r.id === +m[1])) {
+                            this.pilih(+m[1]);
+                            const r = this.rumahDipilih();
+                            if (r && r.lat !== null) this.fokus(r); // dari tombol "Perbaiki titik" di denah
+                            else this.hanyaBelum = true;
+                        }
                     },
 
                     // ---------- daftar ----------
