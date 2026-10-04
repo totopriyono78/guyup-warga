@@ -104,3 +104,24 @@ body.sw-menyeret, body.sw-menyeret * { cursor: grabbing !important; -webkit-user
 .sw-ghost-pin { position: fixed; z-index: 80; pointer-events: none; transform: translate(-50%, calc(-100% - 2px)); display: flex; flex-direction: column; align-items: center; }
 .sw-ghost-pin span { color: #fff; font: 700 12px/1 ui-sans-serif, system-ui, sans-serif; padding: 6px 9px; border-radius: 8px; box-shadow: 0 8px 20px rgba(15, 23, 42, .35); border: 2px solid #fff; white-space: nowrap; }
 .sw-ghost-pin::after { content: ''; width: 0; height: 0; margin-top: -1px; border: 7px solid transparent; border-top-color: #fff; border-bottom: 0; }
+
+/* ---------- Titik rumah yang sedang dibuka: merah, besar, berdenyut ---------- */
+.sw-pin-aktif { z-index: 9999 !important; }
+.sw-pin-aktif .sw-pin,
+.sw-z18 .sw-pin-aktif .sw-pin,
+.sw-z17 .sw-pin-aktif .sw-pin {
+  position: relative; z-index: 1;
+  min-width: 36px; width: auto; height: 26px; padding: 0 7px; border-radius: 8px;
+  font-size: 12px; background: #dc2626 !important; color: #fff !important; border: 2px solid #fff !important;
+  box-shadow: 0 0 0 3px #dc2626, 0 6px 16px rgba(0, 0, 0, .55); transform: scale(1.25);
+}
+.sw-pin-aktif .sw-pin::after {
+  content: ''; position: absolute; left: 50%; top: 100%; margin-left: -7px; margin-top: 2px;
+  border: 7px solid transparent; border-top-color: #dc2626; border-bottom: 0;
+}
+.sw-pin-aktif::before {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px;
+  border-radius: 9999px; background: rgba(220, 38, 38, .35); animation: sw-denyut 1.6s ease-out infinite; pointer-events: none;
+}
+@keyframes sw-denyut { 0% { transform: scale(.3); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sw-pin-aktif::before { animation: none; opacity: .5; } }

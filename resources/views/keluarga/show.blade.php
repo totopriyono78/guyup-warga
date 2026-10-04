@@ -18,7 +18,8 @@
                 map.zoomControl?.remove();
                 document.querySelectorAll('#peta-rumah .leaflet-control-layers').forEach(c => c.remove());
                 const d = el.dataset;
-                L.marker([+d.lat, +d.lng], { icon: SiwargaPeta.ikon('terisi', d.kode, { warnaRt: d.warna, dipilih: true }), interactive: false }).addTo(map);
+                L.marker([+d.lat, +d.lng], { icon: SiwargaPeta.ikon('terisi', d.kode, { warnaRt: d.warna, dipilih: true }), interactive: false }).addTo(map)
+                    .getElement()?.classList.add('sw-pin-aktif');
                 map.setView([+d.lat, +d.lng], 19);
             });
         </script>

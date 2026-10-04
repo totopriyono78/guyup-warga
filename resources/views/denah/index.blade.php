@@ -231,9 +231,10 @@
 
         {{-- Panel detail rumah --}}
         <div x-cloak x-show="aktif" class="fixed inset-0 z-40">
-            <div class="absolute inset-0 bg-slate-900/40" x-transition.opacity @click="tutup()"></div>
+            <div class="absolute inset-0" :class="tampilan === 'peta' ? 'bg-slate-900/10' : 'bg-slate-900/40'" x-transition.opacity @click="tutup()"></div>
             <aside x-show="aktif" x-transition:enter="transition duration-200" x-transition:enter-start="translate-y-full sm:translate-y-0 sm:translate-x-full"
-                   class="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-[26rem] sm:rounded-none">
+                   class="absolute inset-x-0 bottom-0 overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-[26rem] sm:rounded-none"
+                   :class="tampilan === 'peta' ? 'max-h-[52vh]' : 'max-h-[85vh]'">
                 <template x-if="aktif">
                     <div>
                         <div class="sticky top-0 flex items-start justify-between gap-3 border-b border-slate-100 bg-white px-5 py-4">
@@ -338,7 +339,7 @@
                 // status seret disimpan di luar state Alpine (berisi elemen DOM, tidak perlu reaktif)
                 let S = null;
                 let barusSeret = false;
-                let mini = null, nomorMini = 0;
+                let mini = null, nomorMini = 0, idAktif = null;
 
                 return {
                     data, tampilan, aktif: null, zoom: null, sorot: '', map: null, marker: {},
@@ -369,7 +370,8 @@
                         }
                         if (titik.length) this.map.fitBounds(titik, { padding: [30, 30], maxZoom: 19 });
                         const m = location.hash.match(/^#rumah-(\d+)$/);
-                        if (m && this.marker[m[1]]) this.map.setView(this.marker[m[1]].getLatLng(), 20);
+                        if (m && this.marker[m[1]]) this.map.setView(this.marker[m[1]].getLatLng(), 20, { animate: false });
+                        if (this.aktif) this.tandaiAktif(this.aktif.id, 'tengah');
                     },
                     sorotPeta() {
                         const q = this.sorot.trim().toLowerCase();
@@ -379,13 +381,14 @@
                             const kena = this.cocok(+id);
                             el.classList.toggle('sw-pin-sorot', kena);
                             el.classList.toggle('sw-pin-redup', q.length > 1 && !kena);
-                            mk.setZIndexOffset(kena ? 1000 : 0);
+                            mk.setZIndexOffset(+id === idAktif ? 5000 : (kena ? 1000 : 0));
                         }
                         const pertama = Object.keys(this.marker).find(id => this.cocok(+id));
                         if (pertama && this.map) this.map.panTo(this.marker[pertama].getLatLng());
                     },
                     buka(id) {
                         this.aktif = this.data[id] || null;
+                        this.tandaiAktif(this.aktif ? id : null, true);
                         if (this.aktif && this.aktif.lat !== null && tampilan !== 'peta') this.$nextTick(() => this.petaMini(id));
                     },
                     // Peta kecil di panel detail: posisi rumah ini beserta rumah di sekitarnya
@@ -402,7 +405,8 @@
                             if (x.lat === null || +rid === +id) continue;
                             L.marker([x.lat, x.lng], { icon: SiwargaPeta.ikon(x.kat, x.kode, { warnaRt: x.warnaRt }), opacity: .55, interactive: false }).addTo(m);
                         }
-                        L.marker([r.lat, r.lng], { icon: SiwargaPeta.ikon(r.kat, r.kode, { warnaRt: r.warnaRt, dipilih: true }), zIndexOffset: 1000, interactive: false }).addTo(m);
+                        const utama = L.marker([r.lat, r.lng], { icon: SiwargaPeta.ikon(r.kat, r.kode, { warnaRt: r.warnaRt, dipilih: true }), zIndexOffset: 5000, interactive: false }).addTo(m);
+                        utama.getElement()?.classList.add('sw-pin-aktif');
                         m.setView([r.lat, r.lng], 19);
                     },
                     klikRumah(id) { if (!barusSeret) this.buka(id) },
@@ -537,7 +541,42 @@
                         clearTimeout(this._t);
                         this._t = setTimeout(() => this.pesan = null, ok ? 3500 : 6000);
                     },
-                    tutup() { this.aktif = null; this.zoom = null; nomorMini++; if (mini) { mini.remove(); mini = null; } },
+                    tutup() { this.aktif = null; this.zoom = null; nomorMini++; if (mini) { mini.remove(); mini = null; } this.tandaiAktif(null) },
+                    // Titik rumah yang sedang dibuka diberi tanda merah berdenyut agar mudah ditemukan
+                    tandaiAktif(id, geser = false) {
+                        if (!this.map) return;
+                        if (idAktif && this.marker[idAktif]) {
+                            this.marker[idAktif].getElement()?.classList.remove('sw-pin-aktif');
+                            this.marker[idAktif].setZIndexOffset(0);
+                        }
+                        idAktif = id;
+                        const mk = id ? this.marker[id] : null;
+                        if (!mk) return;
+                        mk.getElement()?.classList.add('sw-pin-aktif');
+                        mk.setZIndexOffset(5000);
+                        if (!geser) return;
+                        // Panel detail menutupi sisi kanan peta (layar lebar) atau bagian bawah layar (HP).
+                        // Hitung area peta yang masih terlihat, lalu geser peta agar titik berada di tengah area itu.
+                        const hp = window.innerWidth < 640;
+                        const el = this.map.getContainer();
+                        if (hp) {
+                            const atas = el.getBoundingClientRect().top;
+                            if (atas < 56 || atas > 120) window.scrollBy(0, atas - 64);
+                        }
+                        const kotak = el.getBoundingClientRect();
+                        const vis = {
+                            kiri: Math.max(kotak.left, 0),
+                            kanan: Math.min(kotak.right, window.innerWidth - (hp ? 0 : 416)),
+                            atas: Math.max(kotak.top, 56),
+                            bawah: Math.min(kotak.bottom, window.innerHeight - (hp ? Math.round(window.innerHeight * 0.52) : 0)),
+                        };
+                        const pt = this.map.latLngToContainerPoint(mk.getLatLng());
+                        const tujuanX = (vis.kiri + vis.kanan) / 2 - kotak.left;
+                        const tujuanY = (vis.atas + vis.bawah) / 2 - kotak.top;
+                        const layarX = pt.x + kotak.left, layarY = pt.y + kotak.top;
+                        const tertutup = layarX < vis.kiri + 20 || layarX > vis.kanan - 20 || layarY < vis.atas + 20 || layarY > vis.bawah - 20;
+                        if (tertutup || geser === 'tengah') this.map.panBy([pt.x - tujuanX, pt.y - tujuanY], { animate: false });
+                    },
                     inisial(n) { return (n || '?').split(/\s+/).slice(0, 2).map(k => k[0]).join('').toUpperCase() },
                     cocok(id) {
                         const q = this.sorot.trim().toLowerCase();
