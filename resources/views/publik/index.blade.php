@@ -190,7 +190,8 @@
                 lapisan: {},
                 async init() {
                     if (!this.$refs.peta || !titik.length) return;
-                    const map = await SiwargaPeta.buat(this.$refs.peta, peta, { dasar: 'jalan' });
+                    // citra satelit sebagai tampilan awal (lebih menarik); "Peta jalan" tetap bisa dipilih di tombol lapisan
+                    const map = await SiwargaPeta.buat(this.$refs.peta, peta, { dasar: 'satelit' });
                     const esc = SiwargaPeta.esc;
 
                     const bulatan = [];
@@ -223,7 +224,8 @@
                     map.on('zoomend', ukur);
 
                     const batas = L.latLngBounds(titik.map(t => [t.lat, t.lng]));
-                    if (batas.isValid()) map.fitBounds(batas.pad(0.1), { maxZoom: 19 });
+                    // zoom awal: 1 tingkat lebih dekat dari "semua titik muat" agar rumah lebih terlihat
+                    if (batas.isValid()) map.setView(batas.getCenter(), Math.min(map.getBoundsZoom(batas.pad(0.1)) + 1, 19), { animate: false });
                     ukur();
                     this.map = map;
                 },
