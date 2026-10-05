@@ -12,7 +12,7 @@ class PublikTest extends TestCase
 {
     use Concerns, RefreshDatabase;
 
-    public function test_halaman_umum_menampilkan_warna_rt_tanpa_data_warga(): void
+    public function test_halaman_umum_menampilkan_warna_rt_dan_nama_kepala_tanpa_data_pribadi(): void
     {
         $rumah = $this->buatWilayah('01');
         $rumah->update(['lat' => -6.2, 'lng' => 106.8]);
@@ -24,8 +24,13 @@ class PublikTest extends TestCase
             ->assertSee('#dc2626')
             ->assertSee('RT 01')
             ->assertSee('A-'.$rumah->nomor)
-            ->assertDontSee('Rahasia Penghuni')
+            ->assertSee('Rahasia Penghuni') // nama kepala keluarga tampil (pengaturan bawaan)
+            ->assertDontSee($rumah->kartuKeluargas()->first()->anggota()->first()->nik)
             ->assertSee(route('login'));
+
+        // pengurus RW bisa mematikannya di Pengaturan
+        \App\Models\Pengaturan::simpan(['peta_umum_nama' => '0']);
+        $this->get('/')->assertOk()->assertSee('A-'.$rumah->nomor)->assertDontSee('Rahasia Penghuni');
     }
 
     public function test_halaman_donasi_menyembunyikan_nominal_donatur(): void

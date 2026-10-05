@@ -36,6 +36,7 @@ class PengaturanController extends Controller
             'peta_wilayah' => ['nullable', 'image', 'max:10240'],
             'hapus_peta' => ['nullable', 'boolean'],
         ]);
+        $data['peta_umum_nama'] = $request->boolean('peta_umum_nama') ? '1' : '0';
 
         $lama = Pengaturan::ambil('peta_wilayah');
 

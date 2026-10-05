@@ -202,15 +202,27 @@
                         const tombol = url.dasbor
                             ? `<a href="${esc(url.dasbor)}" class="sw-pub-btn">Buka di denah</a>`
                             : `<a href="${esc(url.login)}" class="sw-pub-btn">Masuk untuk melihat</a>`;
+                        // Nama kepala keluarga (bila diizinkan pengurus); detail anggota tetap perlu masuk
+                        const adaNama = Array.isArray(t.n);
+                        const nama = adaNama ? (t.n.length ? t.n : (t.p ? [t.p] : [])) : [];
+                        const ket = !adaNama ? ''
+                            : nama.length
+                                ? `<ul class="sw-pub-nama">${nama.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`
+                                  + (t.n.length ? '' : '<small>Pemilik rumah</small>')
+                                : `<p class="sw-pub-kosong">${t.s === 'kosong' ? 'Rumah kosong' : (t.s === 'usaha' ? 'Tempat usaha / fasilitas umum' : 'Penghuni belum terdata')}</p>`;
+                        const kunci = adaNama
+                            ? '&#128274; Detail anggota keluarga hanya dapat dilihat oleh warga terdaftar. Silakan masuk untuk melihat.'
+                            : '&#128274; Data penghuni hanya dapat dilihat oleh warga terdaftar. Silakan masuk terlebih dahulu.';
                         const c = L.circleMarker([t.lat, t.lng], {
                             renderer: kanvas, radius: 8, color: '#ffffff', weight: 2, fillColor: t.w || '#64748b', fillOpacity: 0.95,
-                        }).bindTooltip(esc(t.k), { direction: 'top', offset: [0, -6] })
+                        }).bindTooltip(esc(t.k) + (nama.length ? ' · ' + esc(nama[0]) + (nama.length > 1 ? ' +' + (nama.length - 1) : '') : ''), { direction: 'top', offset: [0, -6] })
                           .bindPopup(
                             `<div class="sw-pub-pop">
                                 <div class="sw-pub-head"><span style="background:${esc(t.w)}"></span><b>Rumah ${esc(t.k)}</b> · RT ${esc(t.rt)}</div>
-                                <p>&#128274; Data penghuni hanya dapat dilihat oleh warga terdaftar. Silakan masuk terlebih dahulu.</p>
+                                ${ket}
+                                <p>${kunci}</p>
                                 ${tombol}
-                            </div>`, { maxWidth: 240 })
+                            </div>`, { maxWidth: 260 })
                           .addTo(grup);
                         bulatan.push(c);
                     });
@@ -244,6 +256,12 @@
         .sw-pub-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; color: #0f172a; }
         .sw-pub-head span { width: 12px; height: 12px; border-radius: 9999px; display: inline-block; }
         .sw-pub-pop p { margin: 0 0 8px !important; }
+        .sw-pub-nama { margin: 0 0 6px; padding: 0; list-style: none; }
+        .sw-pub-nama li { font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1.3; }
+        .sw-pub-nama li + li { margin-top: 2px; }
+        .sw-pub-pop small { display: block; margin: -4px 0 6px; font-size: 11px; color: #64748b; }
+        .sw-pub-pop p.sw-pub-kosong { font-style: italic; color: #64748b; }
+        .sw-pub-pop p:not(.sw-pub-kosong) { font-size: 12px; color: #64748b; }
         .leaflet-container a.sw-pub-btn { display: block; text-align: center; background: #0f766e; color: #fff; border-radius: 8px; padding: 7px 10px; font-weight: 600; text-decoration: none; }
     </style>
 @endpush

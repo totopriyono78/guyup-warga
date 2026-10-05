@@ -31,6 +31,17 @@
                     <p class="hint">Mis. hasil foto/scan denah perumahan atau tangkapan layar Google Maps. Ditampilkan di atas halaman Denah.</p>
                 </div>
             </div>
+            <div class="space-y-2 border-t border-slate-100 pt-4">
+                <h2 class="card-title">Halaman umum (website)</h2>
+                <label class="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm">
+                    <input type="hidden" name="peta_umum_nama" value="0">
+                    <input type="checkbox" name="peta_umum_nama" value="1" @checked(old('peta_umum_nama', $p['peta_umum_nama']) === '1') class="mt-0.5 rounded border-slate-300 text-brand-700">
+                    <span>
+                        <b class="text-slate-900">Tampilkan nama kepala keluarga di peta</b>
+                        <span class="block text-slate-500">Pengunjung tanpa login dapat mengklik titik rumah untuk melihat nomor rumah dan nama kepala keluarga (atau pemilik). Anggota keluarga, NIK, No. KK, dan nomor HP tetap hanya untuk warga yang masuk.</span>
+                    </span>
+                </label>
+            </div>
             <div class="border-t border-slate-100 pt-4"><button class="btn btn-primary">Simpan pengaturan</button></div>
         </form>
 

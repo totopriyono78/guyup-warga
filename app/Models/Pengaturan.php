@@ -31,6 +31,8 @@ class Pengaturan extends Model
             'alamat_sekretariat' => null,
             'kontak' => null,
             'peta_wilayah' => null,
+            // '1' = nama kepala keluarga tampil saat titik rumah diklik di peta halaman umum (tanpa login)
+            'peta_umum_nama' => '1',
         ];
 
         try {
